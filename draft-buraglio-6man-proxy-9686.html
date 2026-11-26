@@ -1,0 +1,2242 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Proxy Registration of Self-Generated IPv6 Addresses Using DHCPv6</title>
+<meta content="Nick Buraglio" name="author">
+<meta content="
+       A prior RFC defines a method for IPv6 hosts to register their
+self-generated or statically configured addresses with a DHCPv6 server,
+restoring the address-to-host traceability that network operators rely on
+for troubleshooting and forensic investigation.  That mechanism requires
+a conformant client implementation on the registering host.  Many
+devices, including IoT sensors, legacy endpoints, and constrained
+6LoWPAN nodes, do not and will not implement such a client. 
+       This document defines the behavior of a Proxy Registrar: a first-hop
+IPv6 router that observes address assignment events on its links and
+performs DHCPv6 address registrations on behalf of hosts that have not
+registered their addresses.  The mechanism reuses existing DHCPv6
+message types and relay infrastructure with the addition of one new
+DHCPv6 relay option to signal proxy origin.  It is designed so that
+existing DHCPv6 servers that support address registration require no
+changes to interoperate with a Proxy Registrar. 
+    " name="description">
+<meta content="xml2rfc 3.35.0" name="generator">
+<meta content="IPv6" name="keyword">
+<meta content="DHCPv6" name="keyword">
+<meta content="SLAAC" name="keyword">
+<meta content="IoT" name="keyword">
+<meta content="address registration" name="keyword">
+<meta content="proxy" name="keyword">
+<meta content="draft-buraglio-6man-proxy-9686-00" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.35.0
+    Python 3.14.10
+    ConfigArgParse 1.10.1
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.1.1
+    natsort 8.4.0
+    platformdirs 4.14.7
+    pycountry 24.6.1
+    PyYAML 6.0.3
+    requests 2.33.1
+    wcwidth 0.9.4
+-->
+<link href="draft-buraglio-6man-proxy-9686.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lora SemiBold'), local('Lora-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-semibold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light dark;
+  --background-color: #fff;
+  --text-color: #222;
+  --title-color: #191919;
+  --link-color: #2a6496;
+  --highlight-color: #f9f9f9;
+  --line-color: #eee;
+  --pilcrow-weak: #ddd;
+  --pilcrow-strong: #bbb;
+  --small-font-size: 14.5px;
+  --font-mono: 'Oxygen Mono', monospace;
+  --font-title: "Sofia Sans Semi Condensed", sans-serif;
+  scrollbar-color: #bbb #eee;
+}
+body {
+  max-width: 600px;
+  margin: 75px auto;
+  padding: 0 5px;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  font: 16px/22px "Lora", serif;
+  scroll-behavior: smooth;
+}
+
+.ears {
+  display: none;
+}
+
+/* headings */
+section {
+  clear: both;
+}
+.section-number {
+  padding-right: 0.5em;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  font-weight: 680;
+  margin: 0.8em 0 0.3em;
+  font-size-adjust: 0.5;
+  color: var(--title-color);
+}
+h1 {
+  &#title {
+    font-size: 32px;
+    line-height: 40px;
+    clear: both;
+    margin: 1.5em 0 0.2em;
+  }
+  &#rfcnum {
+    margin: 1.5em 0 0.2em;
+    & + h1#title {
+      margin: 0.2em 0;
+    }
+  }
+}
+
+h1, h2, h3 {
+  font-size: 22px;
+  line-height: 27px;
+}
+h4, h5, h6 {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* general structure */
+.author {
+  padding-bottom: 0.3em;
+  vertical-align: top;
+}
+#abstract+p {
+  font-size: 18px;
+  line-height: 24px;
+  & code, & samp, & tt {
+    font-size: 16px;
+    line-height: 0;
+  }
+}
+
+p {
+  padding: 0;
+  margin: 0.5em 0;
+  text-align: left;
+}
+div {
+  margin: 0;
+}
+.alignRight {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    margin: 0;
+    float: right;
+    clear: both;
+  }
+  & > *:nth-child(2) {
+    clear: both;
+    display: block;
+    border: none;
+  }
+}
+svg {
+  display: block;
+  /* font-family isn't space-separated, but =~ will have to do */
+  &[font-family~="monospace" i], & [font-family~="monospace" i] {
+    font-family: var(--font-mono);
+  }
+}
+.alignCenter {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    /* this isn't optimal, but it's an existence proof.  PrinceXML doesn't
+       support flexbox yet.
+    */
+    display: table;
+    margin: 0 auto;
+  }
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 0.5em 2em;
+  & :is(ol, ul) {
+    margin-left: 1em;
+  }
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+  & li {
+    margin-top: 0.5em;
+  }
+}
+:is(ul, ol).compact, .ulCompact, .olCompact {
+  margin: 0 0 0 2em;
+  & li {
+    margin: 0;
+    & :first-child { margin-top: 0; }
+    & :last-child { margin-bottom: 0; }
+  }
+}
+
+/* definition lists */
+dl {
+  clear: left;
+  --indent: 3ch;
+  /* --indent: attr(indent ch); not supported in any browser, but we can dream */
+  &.olPercent {
+    --indent: 5ch;
+    & > dt {
+      min-width: calc(var(--indent) - 2ch);
+      float: none;
+    }
+  }
+
+  dl > dd > & {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+  }
+
+  &:not(.dlNewline) > dt {
+    float: left;
+    margin-right: 2ch;
+    min-width: 8ch;
+  }
+  & > dd {
+    margin-bottom: .8em;
+    margin-left: var(--indent) !important; /* stupid element overrides */
+    min-height: 2ex;
+  }
+}
+:is(dl.compact, .dlCompact) > dd {
+  margin-bottom: 0;
+  & > :is(:first-child, .break:first-child + *) {
+    margin-top: 0;
+  }
+  & > :is(:last-child) {
+    margin-bottom: 0;
+  }
+}
+:is(dd, span).break {
+  display: none;
+}
+
+/* links */
+a {
+  text-decoration: none;
+  &[href] {
+    color: var(--link-color);
+    &:hover { text-decoration: underline; }
+    &.selfRef {
+      color: var(--text-color);
+      &:hover {
+        text-decoration: none;
+        background-color: var(--highlight-color);
+      }
+    }
+  }
+}
+.iref + a[href].internal {
+  color: var(--text-color);
+}
+a.xref:is(.cite, .auto), :is(#status-of-memo, #copyright) a {
+  white-space: nowrap;
+}
+
+/* Figures */
+tt, code, pre {
+  background-color: var(--highlight-color);
+  font: 14px/22px var(--font-mono);
+}
+tt, code {
+  /* changing the font for inline elements leads to different ascender
+     and descender heights; as we want to retain baseline alignment,
+     remove leading to avoid altering the final height of lines
+     note: this fails if these blocks take an entire line,
+     a different solution would be great */
+  line-height: 0;
+}
+:is(h1, h2, h3, h4, h5, h6) :is(tt, code) {
+  font-size: 84%;
+}
+pre {
+  border: 1px solid var(--line-color);
+  font-size: 13.5px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  margin: 5px;
+  padding: 5px;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0.5em 0;
+  padding: 0;
+  & blockquote {
+    margin: 0.8em 0.4em 0.4em;
+  }
+}
+figcaption, caption {
+  font-style: italic;
+  margin: 0.5em 1.5em;
+  text-align: left;
+  caption-side: bottom;
+}
+@media screen {
+  /* Auto-collapse boilerplate. */
+  :is(#status-of-memo, #copyright) {
+    & p {
+      margin: -2px 0;
+      max-height: 0;
+      transition: max-height 2s ease, margin 0.5s ease 0.5s;
+      overflow: hidden;
+    }
+    &:hover p,
+    & h2:target ~ p {
+      margin: 0.5em 0;
+      max-height: 500px;
+      overflow: auto;
+    }
+  }
+  pre, svg {
+    display: inline-block;
+    /* In the horizontal direction, sometimes people make over-sized figures.
+       Scrollbars for those is therefore necessary: auto adds them as necessary..
+       In the vertical direction, the line-height can combine with the font
+       asender/descender height to produce scrollbars: hidden avoids that. */
+    overflow: auto hidden;
+  }
+  pre {
+    max-width: 100%;
+    width: calc(100% - 22px - 1em);
+  }
+  svg {
+    max-width: calc(100% - 22px - 1em);
+  }
+  figure pre {
+    display: block;
+    width: calc(100% - 25px);
+  }
+  :is(pre, svg) + .pilcrow {
+    display: inline-block;
+    vertical-align: text-bottom;
+    padding-bottom: 8px;
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 0 2em;
+  font-style: italic;
+}
+blockquote {
+  margin: 1em 0;
+  border-left: 2px var(--pilcrow-strong) solid;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+
+/* tables */
+table {
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  &.right { margin-left: auto; }
+  &.center { margin-left: auto; margin-right: auto; }
+  &.left { margin-right: auto; }
+  & .text-left { text-align: left; }
+  & .text-center { text-align: center; }
+  & .text-right { text-align: right; }
+  & caption {
+    margin: 0;
+    padding: 3px 0 3px 1em;
+  }
+  & p { margin: 0; }
+}
+
+thead, tbody {
+  border: 1px solid var(--line-color);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px;
+}
+th {
+  background-color: var(--line-color);
+}
+:is(tr:nth-child(2n), thead+tbody > tr:nth-child(2n+1)) > td {
+  background-color: var(--background-color);
+}
+:is(tr:nth-child(2n+1), thead+tbody > tr:nth-child(2n)) > td {
+  background-color: var(--highlight-color);
+}
+
+/* pilcrow */
+a.pilcrow {
+  margin-left: 3px;
+  opacity: 0.2;
+  user-select: none;
+  &[href] {
+    color: var(--pilcrow-weak);
+    &:hover { text-decoration: none; }
+  }
+  @media not print {
+    :hover > &, &:focus {
+      opacity: 1;
+    }
+    &[href]:hover {
+      color: var(--pilcrow-strong);
+      background-color: transparent;
+    }
+  }
+  @media print {
+    display: none;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-color);
+}
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: 600;
+  font-size: var(--small-font-size);
+}
+.role {
+  font-variant: all-small-caps;
+}
+sub, sup {
+  line-height: 1;
+  font-size: 80%;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: var(--small-font-size);
+  line-height: 18px;
+  --identifier-width: 15ch;
+  & dt {
+    width: var(--identifier-width);
+    min-width: var(--identifier-width);
+    clear: left;
+    float: left;
+    text-align: right;
+    margin-right: 1ch;
+  }
+  & dd {
+    margin: 0;
+    margin-left: calc(1em + var(--identifier-width)) !important;
+    min-width: 5em;
+  }
+  & .authors {
+    & .author {
+      display: inline-block;
+      margin-right: 1.5em;
+    }
+    & .org {
+      font-style: italic;
+    }
+  }
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #999;
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+  & .prepared {
+    float: right;
+  }
+}
+
+/* table of contents */
+#toc {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+
+  & nav {
+    & ul {
+      margin: 0 0.5em 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    & li {
+      line-height: 1.3em;
+      margin: 2px 0;
+      padding-left: 1.2em;
+      text-indent: -1.2em;
+    }
+  }
+  & a.xref {
+    white-space: normal;
+  }
+}
+
+.references {
+  & > dt {
+    text-align: right;
+    font-weight: bold;
+    min-width: 10ch;
+    margin-right: 1.5ch;
+    &:target::before {
+      content: "⇒";
+      margin: 0 10px 0 -25px;
+    }
+  }
+  & > dd {
+    margin-left: 12ch !important;
+    overflow: visible;
+    & .refInstance {
+      margin-bottom: 0.8em;
+    }
+    & .ascii {
+      margin-bottom: 0.25em;
+    }
+  }
+}
+
+#rfc\.index\.index + ul {
+  margin-left: 0;
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  max-width: 20em;
+  margin: 1em auto 1em 0;
+
+  & .nameRole {
+    font-weight: 700;
+    margin-left: 0;
+  }
+  & .label {
+    margin: 0.5em 0;
+  }
+  & .type {
+    display: none;
+  }
+  & .alternative-contact {
+    margin: 0.5em 0 0.25em 0;
+  }
+  & .non-ascii {
+    margin: 0 0 0 2em;
+  }
+  & div.left {
+    text-align: left;
+  }
+  & div.right {
+    text-align: right;
+  }
+}
+
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+@media (min-width: 500px) {
+  #authors-addresses {
+    & > section {
+      column-count: 2;
+      column-gap: 20px;
+    }
+    & > section > h2 {
+      column-span: all;
+    }
+    /* hack for break-inside: avoid-column */
+    & address {
+      display: inline-block;
+      break-inside: avoid-column;
+    }
+  }
+}
+
+/* Comments */
+.rfcEditorRemove {
+  & p:first-of-type {
+    font-style: italic;
+  }
+}
+.cref {
+  background-color: rgba(249, 232, 105, 0.3);
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+
+@media screen {
+  #toc {
+    & nav {
+      font-family: var(--font-title);
+      font-weight: 360;
+      & > ul { margin-bottom: 2em; }
+      & ul {
+        margin: 0 0 0 4px;
+        & :is(p, li) {
+          margin: 2px 0;
+        }
+      }
+    }
+    & a.toplink {
+      float: right;
+    }
+  }
+}
+@media not screen {
+  #toc a.toplink {
+    display: none;
+  }
+}
+
+
+/* TOC layout for smaller screens */
+@media screen and (max-width: 929px) {
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 1px 0 0 0;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
+    opacity: 0.6;
+    & h2 {
+      margin: 0;
+      padding: 2px 0 2px 6px;
+      padding-right: 1em;
+      font-size: 18px;
+      line-height: 24px;
+      min-width: 190px;
+      text-align: right;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+      &::before { /* css hamburger */
+        float: right;
+        position: relative;
+        width: 1em;
+        height: 1px;
+        left: -164px;
+        margin: 8px 0 0 0;
+        background: white none repeat scroll 0 0;
+        box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+        content: "";
+      }
+    }
+    & nav {
+      display: none;
+      background-color: var(--background-color);
+      padding: 0.5em 1em 1em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      height: calc(100vh - 48px);
+      border-left: 1px solid #ddd;
+    }
+    &.active {
+      opacity: 1;
+      & nav { display: block; }
+    }
+    /* Make the collapsed ToC header render white on gray also when it's a link */
+    & h2 a,
+    & h2 a:is(:link, :focus, :hover),
+    & a.toplink,
+    & a.toplink:hover {
+      color: white;
+      background-color: #444;
+      text-decoration: none;
+    }
+    & a.toplink {
+      margin: 2px 0.5em 0;
+    }
+  }
+}
+
+/* TOC layout for wide screens */
+@media screen and (min-width: 930px) {
+  body {
+    padding-right: 360px;
+    padding-right: calc(min(180px + 20%, 500px));
+  }
+  #toc {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    right: calc(50vw - 480px);
+    width: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 1;
+    & h2 {
+      margin: 0;
+      padding: 0.25em 1em 1em 0;
+    }
+    & nav {
+      display: block;
+      height: calc(90vh - 84px);
+      bottom: 0;
+      padding: 0.5em 0 2em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+    & a.toplink {
+      margin: 8px 0.5em 0;
+    }
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc {
+    page-break-before: always;
+    border-top: none;
+    padding-top: 0;
+  }
+  #n-introduction {
+    page-break-before: always;
+  }
+  figure, pre, .vcard {
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  :is(h2, h3, h4, h5, h6)+*, dd {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+}
+
+/* Dark mode. */
+@media (prefers-color-scheme: dark) {
+:root {
+  --background-color: #121212;
+  --text-color: #f0f0f0;
+  --title-color: #fff;
+  --link-color: #4da4f0;
+  --highlight-color: #282828;
+  --line-color: #444;
+  --pilcrow-weak: #444;
+  --pilcrow-strong: #666;
+  scrollbar-color: #777 #333;
+}
+}
+
+/* SVG Trick: a prefix match works because only black and white are allowed */
+svg {
+  & :is([stroke="black"], [stroke^="#000"]) {
+    stroke: var(--text-color);
+  }
+  & :is([stroke="white"], [stroke^="#fff"]) {
+    stroke: var(--background-color);
+  }
+  & :is([fill="black"], [fill^="#000"], :not([fill], [fill] *)) {
+    fill: var(--text-color);
+  }
+  & :is([fill="white"], [fill^="#fff"]) {
+    fill: var(--background-color);
+  }
+}
+</style>
+
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">DHCPv6 Proxy Address Registration</td>
+<td class="right">November 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Buraglio</td>
+<td class="center">Expires 30 May 2027</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">6man</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-buraglio-6man-proxy-9686-00</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-11-26" class="published">26 November 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Standards Track</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2027-05-30">30 May 2027</time></dd>
+<dt class="label-authors">Author:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">N. Buraglio</div>
+<div class="org">Energy Sciences Network</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Proxy Registration of Self-Generated IPv6 Addresses Using DHCPv6</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">A prior RFC defines a method for IPv6 hosts to register their
+self-generated or statically configured addresses with a DHCPv6 server,
+restoring the address-to-host traceability that network operators rely on
+for troubleshooting and forensic investigation.  That mechanism requires
+a conformant client implementation on the registering host.  Many
+devices, including IoT sensors, legacy endpoints, and constrained
+6LoWPAN nodes, do not and will not implement such a client.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+<p id="section-abstract-2">This document defines the behavior of a Proxy Registrar: a first-hop
+IPv6 router that observes address assignment events on its links and
+performs DHCPv6 address registrations on behalf of hosts that have not
+registered their addresses.  The mechanism reuses existing DHCPv6
+message types and relay infrastructure with the addition of one new
+DHCPv6 relay option to signal proxy origin.  It is designed so that
+existing DHCPv6 servers that support address registration require no
+changes to interoperate with a Proxy Registrar.<a href="#section-abstract-2" class="pilcrow">¶</a></p>
+</section>
+<section class="note rfcEditorRemove" id="section-note.1">
+      <h2 id="name-about-this-document">
+<a href="#name-about-this-document" class="section-name selfRef">About This Document</a>
+      </h2>
+<p id="section-note.1-1">This note is to be removed before publishing as an RFC.<a href="#section-note.1-1" class="pilcrow">¶</a></p>
+<p id="section-note.1-2">
+        The latest revision of this draft can be found at <span><a href="https://buraglio.github.io/draft-buraglio-6man-update-9686/">https://buraglio.github.io/draft-buraglio-6man-update-9686/</a></span>.
+        Status information for this document may be found at <span><a href="https://datatracker.ietf.org/doc/draft-buraglio-6man-proxy-9686/">https://datatracker.ietf.org/doc/draft-buraglio-6man-proxy-9686/</a></span>.<a href="#section-note.1-2" class="pilcrow">¶</a></p>
+<p id="section-note.1-3">
+        Discussion of this document takes place on the
+        6man Working Group mailing list (<span><a href="mailto:ipv6@ietf.org">mailto:ipv6@ietf.org</a></span>),
+        which is archived at <span><a href="https://mailarchive.ietf.org/arch/browse/ipv6/">https://mailarchive.ietf.org/arch/browse/ipv6/</a></span>.
+        Subscribe at <span><a href="https://www.ietf.org/mailman/listinfo/ipv6/">https://www.ietf.org/mailman/listinfo/ipv6/</a></span>.<a href="#section-note.1-3" class="pilcrow">¶</a></p>
+<p id="section-note.1-4">Source for this draft and an issue tracker can be found at
+        <span><a href="https://github.com/buraglio/draft-buraglio-6man-update-9686">https://github.com/buraglio/draft-buraglio-6man-update-9686</a></span>.<a href="#section-note.1-4" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 30 May 2027.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1" class="keepWithNext"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1" class="keepWithNext"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-conventions-and-definitions" class="internal xref">Conventions and Definitions</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1" class="keepWithNext"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-problem-statement" class="internal xref">Problem Statement</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-protocol-overview" class="internal xref">Protocol Overview</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-the-option_addr_reg_proxy-o" class="internal xref">The OPTION_ADDR_REG_PROXY Option</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-proxy-registrar-behavior" class="internal xref">Proxy Registrar Behavior</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.1">
+                <p id="section-toc.1-1.6.2.1.1"><a href="#section-6.1" class="auto internal xref">6.1</a>.  <a href="#name-address-detection" class="internal xref">Address Detection</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.2">
+                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-capability-discovery" class="internal xref">Capability Discovery</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.3">
+                <p id="section-toc.1-1.6.2.3.1"><a href="#section-6.3" class="auto internal xref">6.3</a>.  <a href="#name-proxy-registration-procedure" class="internal xref">Proxy Registration Procedure</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.4">
+                <p id="section-toc.1-1.6.2.4.1"><a href="#section-6.4" class="auto internal xref">6.4</a>.  <a href="#name-proxy-registrar-state-machi" class="internal xref">Proxy Registrar State Machine</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.5">
+                <p id="section-toc.1-1.6.2.5.1"><a href="#section-6.5" class="auto internal xref">6.5</a>.  <a href="#name-retransmission" class="internal xref">Retransmission</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.6">
+                <p id="section-toc.1-1.6.2.6.1"><a href="#section-6.6" class="auto internal xref">6.6</a>.  <a href="#name-duplicate-avoidance" class="internal xref">Duplicate Avoidance</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.7">
+                <p id="section-toc.1-1.6.2.7.1"><a href="#section-6.7" class="auto internal xref">6.7</a>.  <a href="#name-refresh-and-expiry" class="internal xref">Refresh and Expiry</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.8">
+                <p id="section-toc.1-1.6.2.8.1"><a href="#section-6.8" class="auto internal xref">6.8</a>.  <a href="#name-proxy-registration-table" class="internal xref">Proxy Registration Table</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-dhcpv6-server-behavior" class="internal xref">DHCPv6 Server Behavior</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-iot-and-constrained-network" class="internal xref">IoT and Constrained Network Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#section-10" class="auto internal xref">10</a>. <a href="#name-privacy-considerations" class="internal xref">Privacy Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#section-11" class="auto internal xref">11</a>. <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12">
+            <p id="section-toc.1-1.12.1"><a href="#section-12" class="auto internal xref">12</a>. <a href="#name-references" class="internal xref">References</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12.2.1">
+                <p id="section-toc.1-1.12.2.1.1"><a href="#section-12.1" class="auto internal xref">12.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12.2.2">
+                <p id="section-toc.1-1.12.2.2.1"><a href="#section-12.2" class="auto internal xref">12.2</a>.  <a href="#name-informative-references" class="internal xref">Informative References</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13">
+            <p id="section-toc.1-1.13.1"><a href="#appendix-A" class="auto internal xref"></a><a href="#name-acknowledgments" class="internal xref">Acknowledgments</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14">
+            <p id="section-toc.1-1.14.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="intro">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1"><span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> defines ADDR-REG-INFORM and ADDR-REG-REPLY message types
+that allow an IPv6 host to inform a DHCPv6 server of its self-generated
+or statically configured addresses.  This provides parity with IPv4
+DHCP logging and enables operators to correlate IPv6 addresses with
+hosts for troubleshooting and security forensics.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">The mechanism in <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> requires a conformant implementation on the
+host.  A first-hop router, however, already observes every address that
+appears on its links: it processes Duplicate Address Detection (DAD)
+traffic (<span>[<a href="#RFC4861" class="cite xref">RFC4861</a>]</span>), may maintain a Source Address Validation
+Improvement (SAVI) binding table (<span>[<a href="#RFC7513" class="cite xref">RFC7513</a>]</span>), and in 6LoWPAN networks
+receives explicit Address Registration Options (ARO) from devices
+(<span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>).  This document defines a Proxy Registrar role for
+first-hop routers, enabling them to register addresses on behalf of
+hosts that have not performed self-registration, using the same
+DHCPv6 relay infrastructure already deployed in most networks.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">The remainder of this document is organized as follows.
+<a href="#problem" class="auto internal xref">Section 3</a> describes the problem in detail.
+<a href="#overview" class="auto internal xref">Section 4</a> provides a protocol overview.
+<a href="#option" class="auto internal xref">Section 5</a> defines the new OPTION_ADDR_REG_PROXY relay option.
+<a href="#proxy-behavior" class="auto internal xref">Section 6</a> specifies Proxy Registrar behavior.
+<a href="#server" class="auto internal xref">Section 7</a> specifies DHCPv6 server behavior.
+<a href="#iot" class="auto internal xref">Section 8</a> discusses IoT and constrained-network considerations.
+<a href="#security" class="auto internal xref">Section 9</a> and <a href="#privacy" class="auto internal xref">Section 10</a> address security and privacy.
+<a href="#iana" class="auto internal xref">Section 11</a> contains IANA considerations.<a href="#section-1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="conventions">
+<section id="section-2">
+      <h2 id="name-conventions-and-definitions">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-conventions-and-definitions" class="section-name selfRef">Conventions and Definitions</a>
+      </h2>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>",
+"<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as
+described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they
+appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+<p id="section-2-2">Terms defined in <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> are used as defined therein, including
+ADDR-REG-INFORM, ADDR-REG-REPLY, and OPTION_ADDR_REG_ENABLE.<a href="#section-2-2" class="pilcrow">¶</a></p>
+<p id="section-2-3">This document defines the following additional terms:<a href="#section-2-3" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-2-4">
+        <dt id="section-2-4.1">Proxy Registrar:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-4.2">
+          <p id="section-2-4.2.1">A first-hop IPv6 router that sends ADDR-REG-INFORM messages on
+behalf of hosts that have not performed self-registration per
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>.<a href="#section-2-4.2.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-4.3">Proxy Registration:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-4.4">
+          <p id="section-2-4.4.1">An address registration performed by a Proxy Registrar on behalf
+of a Registering Host.<a href="#section-2-4.4.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-4.5">Proxy Registration Table:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-4.6">
+          <p id="section-2-4.6.1">A per-interface data structure maintained by the Proxy Registrar
+tracking registered addresses and their current state.<a href="#section-2-4.6.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-4.7">Registering Host:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-4.8">
+          <p id="section-2-4.8.1">An IPv6 node whose self-generated address is being registered by
+a Proxy Registrar.  The Registering Host need not be aware that
+registration is occurring.<a href="#section-2-4.8.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-4.9">Self-Registration:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-4.10">
+          <p id="section-2-4.10.1">Address registration performed directly by the host per <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>.<a href="#section-2-4.10.1" class="pilcrow">¶</a></p>
+</dd>
+      <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="problem">
+<section id="section-3">
+      <h2 id="name-problem-statement">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-problem-statement" class="section-name selfRef">Problem Statement</a>
+      </h2>
+<p id="section-3-1">It is common operational practice, particularly in enterprise and
+campus networks, to use DHCP logs for troubleshooting and forensic
+investigation.  When a security event is detected -- a suspicious
+outbound connection, an unauthorized access attempt -- operators
+consult DHCP records to identify which host held a given IP address
+at the time of interest.  For IPv4, this practice works well because
+most addresses are assigned by DHCP <span>[<a href="#RFC2131" class="cite xref">RFC2131</a>]</span> or statically
+configured by the operator.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<p id="section-3-2">For IPv6, this practice is complicated by SLAAC <span>[<a href="#RFC4862" class="cite xref">RFC4862</a>]</span>, which
+allows hosts to self-configure addresses without any interaction with
+network infrastructure.  <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> addresses this gap by defining
+ADDR-REG-INFORM and ADDR-REG-REPLY messages that allow a host to
+inform the DHCPv6 server of its self-configured addresses, mirroring
+the information that DHCP leases provide for IPv4.<a href="#section-3-2" class="pilcrow">¶</a></p>
+<p id="section-3-3"><span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> requires a client implementation on the host.  Many
+categories of device will never carry such an implementation:<a href="#section-3-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-3-4.1">
+          <p id="section-3-4.1.1">IoT sensors and actuators running minimal firmware with no DHCPv6
+stack.<a href="#section-3-4.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-3-4.2">
+          <p id="section-3-4.2.1">Legacy enterprise equipment from vendors who will not ship
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> support.<a href="#section-3-4.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-3-4.3">
+          <p id="section-3-4.3.1">Constrained 6LoWPAN devices (IEEE 802.15.4, BLE mesh, etc.) where
+DHCPv6 client complexity exceeds platform capabilities.<a href="#section-3-4.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-3-4.4">
+          <p id="section-3-4.4.1">Devices where the firmware update supply chain has effectively
+ended.<a href="#section-3-4.4.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-3-5">For these devices, the traceability gap that <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> was designed
+to close remains open.<a href="#section-3-5" class="pilcrow">¶</a></p>
+<p id="section-3-6">Streaming telemetry of the IPv6 neighbor cache -- available today via
+gNMI with paths defined in <span>[<a href="#RFC8344" class="cite xref">RFC8344</a>]</span> and
+<span>[<a href="#I-D.ietf-6man-ipv6-neighbor-discovery-yang" class="cite xref">I-D.ietf-6man-ipv6-neighbor-discovery-yang</a>]</span> -- provides real-time
+operational visibility of IPv6 neighbor state.  However, this approach
+requires a separate telemetry collection and storage pipeline,
+currently exposes no address-creation timestamp in any standardized
+YANG model (only elapsed age since last reachability confirmation),
+does not persist records after a device leaves the network, and does
+not integrate with the DHCPv6-based IPAM infrastructure that operators
+already use for IPv4 forensics.<a href="#section-3-6" class="pilcrow">¶</a></p>
+<p id="section-3-7">The first-hop router is in a privileged position to fill this gap.
+It observes every address that appears on its directly attached links
+via DAD (<span>[<a href="#RFC4861" class="cite xref">RFC4861</a>]</span>), SAVI binding tables (<span>[<a href="#RFC7513" class="cite xref">RFC7513</a>]</span>), and -- in
+6LoWPAN networks -- explicit ARO messages (<span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>).  It is also
+the DHCPv6 relay node for those links in most deployments, giving it
+direct access to the DHCPv6 relay infrastructure.  This document
+defines behavior for a Proxy Registrar that exploits this position to
+register addresses on behalf of non-capable hosts, placing the
+resulting records in the same DHCPv6 server that operators already
+consult for address-to-host correlation.<a href="#section-3-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="overview">
+<section id="section-4">
+      <h2 id="name-protocol-overview">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-protocol-overview" class="section-name selfRef">Protocol Overview</a>
+      </h2>
+<p id="section-4-1">The Proxy Registrar monitors its directly attached links for new
+globally-scoped IPv6 addresses appearing on Registering Hosts (see
+<a href="#detection" class="auto internal xref">Section 6.1</a>).  Upon detecting a new address, the Proxy Registrar
+first verifies that the DHCPv6 server supports address registration
+(<a href="#capability" class="auto internal xref">Section 6.2</a>), then constructs an ADDR-REG-INFORM message on
+behalf of the Registering Host and delivers it to the DHCPv6 server
+via the existing relay infrastructure (<a href="#procedure" class="auto internal xref">Section 6.3</a>).<a href="#section-4-1" class="pilcrow">¶</a></p>
+<p id="section-4-2">The key protocol element is the choice of relay encapsulation.
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.2.1 specifies that when an ADDR-REG-INFORM is
+relayed, the server validates the registered address against the
+peer-address field of the innermost Relay-Forward message.  The Proxy
+Registrar exploits this by acting as the innermost relay, setting
+peer-address to the Registering Host's address, and including a new
+relay option, OPTION_ADDR_REG_PROXY (<a href="#option" class="auto internal xref">Section 5</a>), that identifies the
+encapsulated message as a Proxy Registration.  An
+OPTION_CLIENT_LINKLAYER_ADDR option <span>[<a href="#RFC6939" class="cite xref">RFC6939</a>]</span> carries the
+Registering Host's link-layer address.<a href="#section-4-2" class="pilcrow">¶</a></p>
+<p id="section-4-3">Existing RFC 9686-compliant DHCPv6 servers that do not recognize
+OPTION_ADDR_REG_PROXY silently ignore it and process the inner
+ADDR-REG-INFORM normally, requiring no server-side changes for
+basic interoperability.<a href="#section-4-3" class="pilcrow">¶</a></p>
+<span id="name-proxy-registration-procedur"></span><div id="fig-overview">
+<figure id="figure-1">
+        <div class="alignLeft art-text artwork" id="section-4-4.1">
+<pre>
++----------+        +------------------+        +---------------+
+|REGISTERING|        | PROXY REGISTRAR  |        | DHCPv6 SERVER |
+|   HOST   |        | (first-hop router)|        |               |
++----------+        +------------------+        +---------------+
+     |                        |                         |
+     | DAD (NS/NA) or ARO     |                         |
+     |-----------------------&gt;|                         |
+     |                        | Information-Request     |
+     |                        | [OPTION_ADDR_REG_ENABLE]|
+     |                        |------------------------&gt;|
+     |                        |&lt;------------------------|
+     |                        | Reply                   |
+     |                        | [OPTION_ADDR_REG_ENABLE]|
+     |                        |                         |
+     |                        | Relay-Forward           |
+     |                        |  peer-addr: host's addr |
+     |                        |  link-addr: router intf |
+     |                        |  OPTION_ADDR_REG_PROXY  |
+     |                        |  OPTION_CLIENT_LL_ADDR  |
+     |                        |  [inner: ADDR-REG-INFORM|
+     |                        |   client-id: DUID-LL    |
+     |                        |   IA Addr: host's addr] |
+     |                        |------------------------&gt;|
+     |                        |                  Register/log
+     |                        |&lt;------------------------|
+     |                        | Relay-Reply             |
+     |                        |  [inner: ADDR-REG-REPLY]|
+</pre>
+</div>
+<figcaption><a href="#figure-1" class="selfRef">Figure 1</a>:
+<a href="#name-proxy-registration-procedur" class="selfRef">Proxy Registration Procedure Overview</a>
+        </figcaption></figure>
+</div>
+<p id="section-4-5">If the Proxy Registrar detects that the Registering Host has
+performed Self-Registration (by snooping ADDR-REG-INFORM traffic
+on the link), it suppresses or withdraws its Proxy Registration to
+avoid duplicate entries at the server (<a href="#dedup" class="auto internal xref">Section 6.6</a>).  The Proxy
+Registrar tracks registered addresses in a Proxy Registration Table
+(<a href="#table" class="auto internal xref">Section 6.8</a>) and issues refreshes and expirations as the address
+lifetime evolves (<a href="#refresh" class="auto internal xref">Section 6.7</a>).<a href="#section-4-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="option">
+<section id="section-5">
+      <h2 id="name-the-option_addr_reg_proxy-o">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-the-option_addr_reg_proxy-o" class="section-name selfRef">The OPTION_ADDR_REG_PROXY Option</a>
+      </h2>
+<p id="section-5-1">The OPTION_ADDR_REG_PROXY option is a zero-length DHCPv6 option
+carried in a Relay-Forward message to signal that the encapsulated
+ADDR-REG-INFORM was constructed by a Proxy Registrar rather than by
+the Registering Host.<a href="#section-5-1" class="pilcrow">¶</a></p>
+<span id="name-option_addr_reg_proxy-forma"></span><div id="fig-option">
+<figure id="figure-2">
+        <div class="alignLeft art-text artwork" id="section-5-2.1">
+<pre>
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       option-code (TBD1)      |          option-len (0)       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</pre>
+</div>
+<figcaption><a href="#figure-2" class="selfRef">Figure 2</a>:
+<a href="#name-option_addr_reg_proxy-forma" class="selfRef">OPTION_ADDR_REG_PROXY Format</a>
+        </figcaption></figure>
+</div>
+<span class="break"></span><dl class="dlParallel" id="section-5-3">
+        <dt id="section-5-3.1">option-code:</dt>
+        <dd style="margin-left: 1.5em" id="section-5-3.2">
+          <p id="section-5-3.2.1">OPTION_ADDR_REG_PROXY (TBD1)<a href="#section-5-3.2.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-5-3.3">option-len:</dt>
+        <dd style="margin-left: 1.5em" id="section-5-3.4">
+          <p id="section-5-3.4.1">0<a href="#section-5-3.4.1" class="pilcrow">¶</a></p>
+</dd>
+      <dd class="break"></dd>
+</dl>
+<p id="section-5-4">This option <span class="bcp14">MUST</span> only appear in a Relay-Forward message.  It <span class="bcp14">MUST NOT</span> appear in any other DHCPv6 message type.  At most one instance
+of this option <span class="bcp14">MUST</span> be present in a Relay-Forward message.<a href="#section-5-4" class="pilcrow">¶</a></p>
+<p id="section-5-5">A DHCPv6 server or relay agent that does not recognize this option
+<span class="bcp14">MUST</span> silently ignore it, per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span> Section 10.  The
+encapsulated ADDR-REG-INFORM is processed according to <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>
+regardless of whether the server recognizes OPTION_ADDR_REG_PROXY.
+This ensures backward compatibility: a Proxy Registrar interoperates
+with any existing <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>-compliant server.<a href="#section-5-5" class="pilcrow">¶</a></p>
+<p id="section-5-6">A DHCPv6 server that does recognize this option <span class="bcp14">SHOULD</span> record the
+proxy-origin of the registration (see <a href="#server" class="auto internal xref">Section 7</a>).  The presence of
+this option <span class="bcp14">MUST NOT</span> cause the server to alter its validation of the
+inner ADDR-REG-INFORM; validation follows <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.2.1
+unchanged.<a href="#section-5-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="proxy-behavior">
+<section id="section-6">
+      <h2 id="name-proxy-registrar-behavior">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-proxy-registrar-behavior" class="section-name selfRef">Proxy Registrar Behavior</a>
+      </h2>
+<div id="detection">
+<section id="section-6.1">
+        <h3 id="name-address-detection">
+<a href="#section-6.1" class="section-number selfRef">6.1. </a><a href="#name-address-detection" class="section-name selfRef">Address Detection</a>
+        </h3>
+<p id="section-6.1-1">The Proxy Registrar <span class="bcp14">MUST</span> register each globally-scoped unicast
+address independently.  Registration <span class="bcp14">MUST NOT</span> be performed for
+link-local addresses, addresses assigned by DHCPv6 (identifiable
+by the presence of a matching IA address in a DHCPv6 Reply observed
+on the link), or loopback addresses.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
+<p id="section-6.1-2">The Proxy Registrar <span class="bcp14">MUST</span> initiate registration upon observing any of
+the following events for a globally-scoped unicast address:<a href="#section-6.1-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-6.1-3">
+<li id="section-6.1-3.1">
+            <p id="section-6.1-3.1.1"><strong>DAD completion.</strong>  The Proxy Registrar observes a Neighbor
+Solicitation for a tentative address (DAD NS per <span>[<a href="#RFC4861" class="cite xref">RFC4861</a>]</span>
+Section 5.4) and no Neighbor Advertisement conflicting with that
+address is received within the DAD timeout.  The Proxy Registrar
+<span class="bcp14">SHOULD</span> wait until the full DAD timeout has elapsed before
+initiating registration.<a href="#section-6.1-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-6.1-3.2">
+            <p id="section-6.1-3.2.1"><strong>FCFS SAVI binding creation.</strong>  An entry in the First-Come
+First-Served Source Address Validation Improvement binding table
+(<span>[<a href="#RFC7513" class="cite xref">RFC7513</a>]</span>) transitions to BOUND state for a new globally-scoped
+address.  Implementations <span class="bcp14">SHOULD</span> use this trigger when SAVI is
+deployed, as it provides stronger address-ownership evidence than
+DAD snooping alone.<a href="#section-6.1-3.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-6.1-3.3">
+            <p id="section-6.1-3.3.1"><strong>ARO receipt (6LoWPAN context).</strong>  The Proxy Registrar receives
+a Neighbor Solicitation carrying an Address Registration Option
+(<span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>) that creates or updates a binding for a
+globally-scoped address.  This is the normative trigger when
+operating as a 6LoWPAN Backbone Router; see <a href="#iot" class="auto internal xref">Section 8</a>.<a href="#section-6.1-3.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-6.1-3.4">
+            <p id="section-6.1-3.4.1"><strong>Neighbor cache REACHABLE transition.</strong>  A new globally-scoped
+unicast address appears in the neighbor cache in REACHABLE state.
+This <span class="bcp14">MAY</span> be used as a fallback trigger on routers that have no
+access to DAD timing or SAVI state, with the understanding that
+it provides lower address-ownership assurance than the triggers
+above.<a href="#section-6.1-3.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-6.1-4">Triggers 1, 2, and 3 are preferred over trigger 4 wherever available.
+A Proxy Registrar <span class="bcp14">MUST</span> implement trigger 1.  Triggers 2, 3, and 4 are
+implementation options subject to their applicability conditions.<a href="#section-6.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="capability">
+<section id="section-6.2">
+        <h3 id="name-capability-discovery">
+<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-capability-discovery" class="section-name selfRef">Capability Discovery</a>
+        </h3>
+<p id="section-6.2-1">The Proxy Registrar <span class="bcp14">MUST</span> verify that the DHCPv6 server supports
+address registration before sending any Proxy Registration.  It does
+so by including OPTION_ADDR_REG_ENABLE (<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.4) in
+the Option Request Option of a DHCPv6 Information-Request.  If the
+server includes OPTION_ADDR_REG_ENABLE in its Reply, the Proxy
+Registrar <span class="bcp14">MAY</span> send Proxy Registrations.  If the server does not
+include OPTION_ADDR_REG_ENABLE, the Proxy Registrar <span class="bcp14">MUST NOT</span> send
+Proxy Registrations on that link.<a href="#section-6.2-1" class="pilcrow">¶</a></p>
+<p id="section-6.2-2">This reuses the capability negotiation defined in <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> without
+any new option or exchange.  The Proxy Registrar acts as a DHCPv6
+client for the purpose of this check.<a href="#section-6.2-2" class="pilcrow">¶</a></p>
+<p id="section-6.2-3">The Proxy Registrar <span class="bcp14">MAY</span> cache the capability result and reuse it
+for subsequent registrations.  The cache <span class="bcp14">MUST</span> be invalidated if the
+DHCPv6 server address changes or if the Proxy Registrar receives a
+Reply that does not include OPTION_ADDR_REG_ENABLE.<a href="#section-6.2-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="procedure">
+<section id="section-6.3">
+        <h3 id="name-proxy-registration-procedure">
+<a href="#section-6.3" class="section-number selfRef">6.3. </a><a href="#name-proxy-registration-procedure" class="section-name selfRef">Proxy Registration Procedure</a>
+        </h3>
+<p id="section-6.3-1">Upon detecting a new address per <a href="#detection" class="auto internal xref">Section 6.1</a> and confirming server
+support per <a href="#capability" class="auto internal xref">Section 6.2</a>, the Proxy Registrar sends a Relay-Forward
+message with the following field values.<a href="#section-6.3-1" class="pilcrow">¶</a></p>
+<p id="section-6.3-2">The outer Relay-Forward uses msg-type RELAY-FORW (12) per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span>.
+The hop-count <span class="bcp14">MUST</span> be set to 0; the Proxy Registrar is always the
+innermost relay, which ensures its peer-address field is the value the
+server validates against per <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.2.1.  Any upstream
+relay agents encapsulate the message per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span> Section 19,
+incrementing hop-count normally.  The link-address is set to the Proxy
+Registrar's global unicast address on the client-facing interface,
+identifying the client's link to the server.  The peer-address <span class="bcp14">MUST</span> be
+set to the IPv6 address being registered; this value <span class="bcp14">MUST</span> equal the
+address in the IA Address option of the encapsulated ADDR-REG-INFORM.<a href="#section-6.3-2" class="pilcrow">¶</a></p>
+<p id="section-6.3-3">The Relay-Forward <span class="bcp14">MUST</span> include OPTION_ADDR_REG_PROXY (<a href="#option" class="auto internal xref">Section 5</a>) to
+signal proxy origin, OPTION_CLIENT_LINKLAYER_ADDR (<span>[<a href="#RFC6939" class="cite xref">RFC6939</a>]</span>) set to
+the Registering Host's link-layer address as observed from the detection
+trigger (DAD, SAVI binding, or ARO) with the hardware type set from the
+interface type, and OPTION_RELAY_MSG (<span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span>) containing the
+encapsulated ADDR-REG-INFORM.<a href="#section-6.3-3" class="pilcrow">¶</a></p>
+<p id="section-6.3-4">The encapsulated ADDR-REG-INFORM (message type 36, <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>) <span class="bcp14">MUST</span>
+include a Client Identifier option containing a DUID-LL derived from the
+Registering Host's link-layer address per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span> Section 11.4.
+This derivation is deterministic from the link-layer address and requires
+no DHCPv6 snooping.  The IA Address option contains the address being
+registered; the valid-lifetime <span class="bcp14">MUST</span> be set to the remaining valid-lifetime
+of the prefix containing the registered address at the time of
+registration, as advertised in the most recent Router Advertisement sent
+by the Proxy Registrar for that prefix.  The preferred-lifetime and
+valid-lifetime are described further in <a href="#refresh" class="auto internal xref">Section 6.7</a>.  The inner
+ADDR-REG-INFORM <span class="bcp14">MUST NOT</span> contain a Server Identifier option or an Option
+Request Option.<a href="#section-6.3-4" class="pilcrow">¶</a></p>
+<p id="section-6.3-5">The Relay-Forward is sent to the All_DHCP_Relay_Agents_and_Servers
+multicast address (ff02::1:2) or unicast to the server if the server
+address is known from a prior DHCPv6 exchange.  Per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span>
+Section 19.1, ADDR-REG-REPLY is returned unicast to the Proxy
+Registrar's source address.<a href="#section-6.3-5" class="pilcrow">¶</a></p>
+<p id="section-6.3-6">If the DHCPv6 server holds an existing binding for the Registering Host
+with a different DUID type (e.g., DUID-UUID from a prior stateful DHCPv6
+exchange), the server <span class="bcp14">MAY</span> correlate the two records using the link-layer
+address in OPTION_CLIENT_LINKLAYER_ADDR.<a href="#section-6.3-6" class="pilcrow">¶</a></p>
+<p id="section-6.3-7">The Proxy Registrar <span class="bcp14">MUST</span> register each globally-scoped unicast address
+of a Registering Host independently.  A host with addresses from
+multiple prefixes will have one Proxy Registration Table entry per
+address, each managed with its own procedure and lifetime.<a href="#section-6.3-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="state-machine">
+<section id="section-6.4">
+        <h3 id="name-proxy-registrar-state-machi">
+<a href="#section-6.4" class="section-number selfRef">6.4. </a><a href="#name-proxy-registrar-state-machi" class="section-name selfRef">Proxy Registrar State Machine</a>
+        </h3>
+<p id="section-6.4-1">The Proxy Registrar maintains per-address state in the Proxy
+Registration Table (<a href="#table" class="auto internal xref">Section 6.8</a>).  Each entry transitions through the
+following states:<a href="#section-6.4-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-6.4-2">
+          <dt id="section-6.4-2.1">PENDING:</dt>
+          <dd style="margin-left: 1.5em" id="section-6.4-2.2">
+            <p id="section-6.4-2.2.1">An ADDR-REG-INFORM has been sent; the Proxy Registrar is awaiting
+an ADDR-REG-REPLY.<a href="#section-6.4-2.2.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.4-2.3">REGISTERED:</dt>
+          <dd style="margin-left: 1.5em" id="section-6.4-2.4">
+            <p id="section-6.4-2.4.1">An ADDR-REG-REPLY with a success status was received.  The
+address is registered at the server.<a href="#section-6.4-2.4.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.4-2.5">FAILED:</dt>
+          <dd style="margin-left: 1.5em" id="section-6.4-2.6">
+            <p id="section-6.4-2.6.1">Retransmission was exhausted (MRC reached) or the server returned
+a non-zero Status Code (e.g., NotOnLink, UnspecFail).  The
+registration did not succeed.<a href="#section-6.4-2.6.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.4-2.7">SUPPRESSED:</dt>
+          <dd style="margin-left: 1.5em" id="section-6.4-2.8">
+            <p id="section-6.4-2.8.1">Self-Registration by the Registering Host was detected.  The
+Proxy Registrar has yielded and <span class="bcp14">MUST NOT</span> send further
+registrations or refreshes for this address.<a href="#section-6.4-2.8.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-6.4-3">State transitions are as follows:<a href="#section-6.4-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.4-4.1">
+            <p id="section-6.4-4.1.1">PENDING -&gt; REGISTERED: an ADDR-REG-REPLY is received with success
+status (Status Code absent or Success).  The Proxy Registrar
+updates the registration timestamp and schedules the next refresh
+per <a href="#refresh" class="auto internal xref">Section 6.7</a>.<a href="#section-6.4-4.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.2">
+            <p id="section-6.4-4.2.1">PENDING -&gt; FAILED: retransmission count reaches MRC (3) without
+receiving an ADDR-REG-REPLY, or an ADDR-REG-REPLY with a
+non-zero Status Code is received.  The Proxy Registrar logs the
+failure and suppresses further attempts until the next address
+detection event for this address.<a href="#section-6.4-4.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.3">
+            <p id="section-6.4-4.3.1">PENDING -&gt; SUPPRESSED: host Self-Registration is detected while
+the ADDR-REG-INFORM is in flight (see <a href="#dedup" class="auto internal xref">Section 6.6</a>).  The Proxy
+Registrar waits for the ADDR-REG-REPLY (or retransmission
+timeout), then sends a final ADDR-REG-INFORM with
+preferred-lifetime=0 and valid-lifetime=0 to withdraw the Proxy
+Registration, and transitions to SUPPRESSED.<a href="#section-6.4-4.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.4">
+            <p id="section-6.4-4.4.1">REGISTERED -&gt; PENDING: a refresh is due per <a href="#refresh" class="auto internal xref">Section 6.7</a>.  The
+Proxy Registrar sends a new ADDR-REG-INFORM.<a href="#section-6.4-4.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.5">
+            <p id="section-6.4-4.5.1">REGISTERED -&gt; SUPPRESSED: host Self-Registration is detected.
+The Proxy Registrar immediately sends an ADDR-REG-INFORM with
+preferred-lifetime=0 and valid-lifetime=0 to withdraw the Proxy
+Registration, then transitions to SUPPRESSED.<a href="#section-6.4-4.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.6">
+            <p id="section-6.4-4.6.1">REGISTERED -&gt; (removed): an expiry trigger fires per <a href="#refresh" class="auto internal xref">Section 6.7</a>.
+The Proxy Registrar sends an ADDR-REG-INFORM with
+preferred-lifetime=0 and valid-lifetime=0, then removes the
+entry from the Proxy Registration Table.<a href="#section-6.4-4.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.7">
+            <p id="section-6.4-4.7.1">FAILED -&gt; PENDING: the next address detection event for this
+address.  The Proxy Registrar retries registration.<a href="#section-6.4-4.7.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.4-4.8">
+            <p id="section-6.4-4.8.1">SUPPRESSED -&gt; (removed): an address expiry event occurs.  No
+expiry registration is sent (the server will expire the
+host's own registration); the entry is removed.<a href="#section-6.4-4.8.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-6.4-5"><strong>Reboot recovery:</strong><a href="#section-6.4-5" class="pilcrow">¶</a></p>
+<p id="section-6.4-6">The Proxy Registration Table is in-memory and is lost on restart.
+On restart, the Proxy Registrar recovers naturally: as neighbor
+cache entries are repopulated via ND (<span>[<a href="#RFC4861" class="cite xref">RFC4861</a>]</span>), DAD-completion
+events re-trigger detection and registration for each active
+address.  A transient gap exists between restart and repopulation
+during which the server's proxy-registration records may be more
+current than the Proxy Registrar's table.  This gap is bounded by
+ND reachability timescales and is acceptable for the operational
+use cases described in <a href="#problem" class="auto internal xref">Section 3</a>.<a href="#section-6.4-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="retransmission">
+<section id="section-6.5">
+        <h3 id="name-retransmission">
+<a href="#section-6.5" class="section-number selfRef">6.5. </a><a href="#name-retransmission" class="section-name selfRef">Retransmission</a>
+        </h3>
+<p id="section-6.5-1">The Proxy Registrar follows the retransmission procedure of
+<span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span> Section 15 for each ADDR-REG-INFORM it sends, with the
+following parameters:<a href="#section-6.5-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-6.5-2">
+          <dt id="section-6.5-2.1">IRT (Initial Retransmission Time):</dt>
+          <dd style="margin-left: 1.5em" id="section-6.5-2.2">
+            <p id="section-6.5-2.2.1">1 second<a href="#section-6.5-2.2.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.5-2.3">MRT (Maximum Retransmission Time):</dt>
+          <dd style="margin-left: 1.5em" id="section-6.5-2.4">
+            <p id="section-6.5-2.4.1">120 seconds<a href="#section-6.5-2.4.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.5-2.5">MRC (Maximum Retransmission Count):</dt>
+          <dd style="margin-left: 1.5em" id="section-6.5-2.6">
+            <p id="section-6.5-2.6.1">3<a href="#section-6.5-2.6.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-6.5-2.7">MRD (Maximum Retransmission Duration):</dt>
+          <dd style="margin-left: 1.5em" id="section-6.5-2.8">
+            <p id="section-6.5-2.8.1">0 (no maximum duration)<a href="#section-6.5-2.8.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-6.5-3">The same transaction ID <span class="bcp14">MUST</span> be used across all retransmissions of a
+single ADDR-REG-INFORM for a given registration event.  Per
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.5, the preferred-lifetime and valid-lifetime
+fields in the IA Address option <span class="bcp14">MUST</span> be updated to reflect the
+current remaining lifetimes in each retransmission.<a href="#section-6.5-3" class="pilcrow">¶</a></p>
+<p id="section-6.5-4">Upon exhausting retransmissions (MRC reached) without receiving an
+ADDR-REG-REPLY, the Proxy Registrar <span class="bcp14">MUST</span> transition the entry to
+FAILED state (<a href="#state-machine" class="auto internal xref">Section 6.4</a>) and cease retransmission.  It <span class="bcp14">MUST NOT</span> retry until the next address detection event for that address.<a href="#section-6.5-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="dedup">
+<section id="section-6.6">
+        <h3 id="name-duplicate-avoidance">
+<a href="#section-6.6" class="section-number selfRef">6.6. </a><a href="#name-duplicate-avoidance" class="section-name selfRef">Duplicate Avoidance</a>
+        </h3>
+<p id="section-6.6-1">The Proxy Registrar <span class="bcp14">MUST</span> snoop ADDR-REG-INFORM messages sent by
+hosts on its directly attached links.  These messages are sent to
+the All_DHCP_Relay_Agents_and_Servers multicast address (ff02::1:2)
+and are observable by the Proxy Registrar as a relay node.  Receipt
+of an ADDR-REG-INFORM from a source address matching an address in
+the Proxy Registration Table constitutes detection of a
+Self-Registration for that address.<a href="#section-6.6-1" class="pilcrow">¶</a></p>
+<p id="section-6.6-2">The timing of detection relative to the state of the Proxy Registration
+Table entry determines the appropriate response.<a href="#section-6.6-2" class="pilcrow">¶</a></p>
+<p id="section-6.6-3">If the Proxy Registrar detects a Self-Registration before it has sent
+any Proxy Registration for that address (i.e., before the entry
+transitions to PENDING), it <span class="bcp14">MUST NOT</span> send a Proxy Registration for that
+address.  The entry transitions directly to SUPPRESSED.<a href="#section-6.6-3" class="pilcrow">¶</a></p>
+<p id="section-6.6-4">If the Self-Registration is detected while a Proxy Registration is in
+PENDING state, the Proxy Registrar <span class="bcp14">MUST</span> wait for the in-flight
+ADDR-REG-REPLY (or retransmission timeout, whichever comes first).
+Upon receiving the reply or on timeout, it <span class="bcp14">MUST</span> send a final
+ADDR-REG-INFORM with preferred-lifetime=0 and valid-lifetime=0 to
+withdraw the Proxy Registration from the server.  The entry then
+transitions to SUPPRESSED.<a href="#section-6.6-4" class="pilcrow">¶</a></p>
+<p id="section-6.6-5">If the Self-Registration is detected while the entry is in REGISTERED
+state, the Proxy Registrar <span class="bcp14">MUST</span> immediately send an ADDR-REG-INFORM
+with preferred-lifetime=0 and valid-lifetime=0 to withdraw the Proxy
+Registration.  The entry transitions to SUPPRESSED.<a href="#section-6.6-5" class="pilcrow">¶</a></p>
+<p id="section-6.6-6">In all cases, once an entry is in SUPPRESSED state, the Proxy
+Registrar <span class="bcp14">MUST NOT</span> send further registrations or refreshes for that
+address.  The Registering Host's own registration becomes the
+authoritative entry at the server.<a href="#section-6.6-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="refresh">
+<section id="section-6.7">
+        <h3 id="name-refresh-and-expiry">
+<a href="#section-6.7" class="section-number selfRef">6.7. </a><a href="#name-refresh-and-expiry" class="section-name selfRef">Refresh and Expiry</a>
+        </h3>
+<p id="section-6.7-1">For an address configured using SLAAC (<span>[<a href="#RFC4862" class="cite xref">RFC4862</a>]</span>), the Proxy
+Registrar computes the refresh interval as:<a href="#section-6.7-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-6.7-2">
+<pre>
+  refresh_interval = floor(0.8 * valid_lifetime * desync_factor)
+</pre><a href="#section-6.7-2" class="pilcrow">¶</a>
+</div>
+<p id="section-6.7-3">where desync_factor is a uniformly distributed random value in the
+range [0.9, 1.1], re-drawn at each refresh cycle.  This matches the
+refresh computation of <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.6.1.  The Proxy
+Registrar reschedules refresh only if the remaining valid-lifetime
+has changed by more than 1% since the last registration, to avoid
+churn from minor lifetime fluctuations.<a href="#section-6.7-3" class="pilcrow">¶</a></p>
+<p id="section-6.7-4">The valid-lifetime used in refresh ADDR-REG-INFORM messages <span class="bcp14">MUST</span>
+be the remaining valid-lifetime of the prefix containing the
+registered address at the time of the refresh, as advertised in
+the most recent Router Advertisement sent by the Proxy Registrar.<a href="#section-6.7-4" class="pilcrow">¶</a></p>
+<p id="section-6.7-5">Temporary addresses generated per <span>[<a href="#RFC8981" class="cite xref">RFC8981</a>]</span> <span class="bcp14">MUST</span> be registered and
+refreshed using the same procedure as other SLAAC addresses.  The
+privacy properties of <span>[<a href="#RFC8981" class="cite xref">RFC8981</a>]</span> protect against cross-site tracking
+by external observers; they do not preclude operator-internal address
+management.  The network operator already has visibility of the host's
+topological location at the /64 boundary from the prefix assignment, so
+registering the specific /128 in the DHCPv6 server adds no information
+to external parties (see <a href="#privacy" class="auto internal xref">Section 10</a>).  When a host generates a new
+temporary address, DAD for the new address triggers a new Proxy
+Registration entry; expiry of the old address follows the triggers
+described below.<a href="#section-6.7-5" class="pilcrow">¶</a></p>
+<p id="section-6.7-6">When the Proxy Registrar cannot determine the remaining lifetime from
+its own RA prefix state, it <span class="bcp14">MUST</span> use a refresh interval of 14400
+seconds (4 hours), consistent with <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.6.2.<a href="#section-6.7-6" class="pilcrow">¶</a></p>
+<p id="section-6.7-7">The Proxy Registrar <span class="bcp14">MUST</span> send an ADDR-REG-INFORM with
+preferred-lifetime=0 and valid-lifetime=0 and remove the entry from
+the Proxy Registration Table upon any of the following:<a href="#section-6.7-7" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.7-8.1">
+            <p id="section-6.7-8.1.1">The neighbor cache entry for the registered address transitions
+to INCOMPLETE state or is removed (host unreachable or departed).<a href="#section-6.7-8.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.7-8.2">
+            <p id="section-6.7-8.2.1">The FCFS SAVI binding for the address expires.<a href="#section-6.7-8.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.7-8.3">
+            <p id="section-6.7-8.3.1">The ARO binding for the address expires, or an ARO with
+Registration Lifetime=0 is received (see <a href="#iot" class="auto internal xref">Section 8</a>).<a href="#section-6.7-8.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.7-8.4">
+            <p id="section-6.7-8.4.1">The valid-lifetime of the prefix containing the address reaches
+zero in the most recently sent Router Advertisement.<a href="#section-6.7-8.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+</section>
+</div>
+<div id="table">
+<section id="section-6.8">
+        <h3 id="name-proxy-registration-table">
+<a href="#section-6.8" class="section-number selfRef">6.8. </a><a href="#name-proxy-registration-table" class="section-name selfRef">Proxy Registration Table</a>
+        </h3>
+<p id="section-6.8-1">The Proxy Registrar <span class="bcp14">MUST</span> maintain a Proxy Registration Table per
+interface.  Each entry <span class="bcp14">MUST</span> contain at minimum:<a href="#section-6.8-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.8-2.1">
+            <p id="section-6.8-2.1.1">Registering Host link-layer address<a href="#section-6.8-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.8-2.2">
+            <p id="section-6.8-2.2.1">Registered IPv6 address<a href="#section-6.8-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.8-2.3">
+            <p id="section-6.8-2.3.1">Current state (per <a href="#state-machine" class="auto internal xref">Section 6.4</a>: PENDING, REGISTERED,
+FAILED, or SUPPRESSED)<a href="#section-6.8-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.8-2.4">
+            <p id="section-6.8-2.4.1">Next refresh time (for REGISTERED entries)<a href="#section-6.8-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.8-2.5">
+            <p id="section-6.8-2.5.1">Transaction ID of the last sent ADDR-REG-INFORM<a href="#section-6.8-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-6.8-3">The table is implementation-internal; no wire format is defined.
+The Proxy Registrar <span class="bcp14">MUST</span> consult the table before sending any Proxy
+Registration to enforce duplicate avoidance per <a href="#dedup" class="auto internal xref">Section 6.6</a>.<a href="#section-6.8-3" class="pilcrow">¶</a></p>
+<p id="section-6.8-4">A Registering Host with multiple globally-scoped unicast addresses
+has one entry per address.  Entries are independent: a SUPPRESSED
+entry for one address does not affect registration of other addresses
+held by the same host.<a href="#section-6.8-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="server">
+<section id="section-7">
+      <h2 id="name-dhcpv6-server-behavior">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-dhcpv6-server-behavior" class="section-name selfRef">DHCPv6 Server Behavior</a>
+      </h2>
+<p id="section-7-1">A DHCPv6 server that receives a Relay-Forward containing an
+encapsulated ADDR-REG-INFORM <span class="bcp14">MUST</span> process it using the validation
+rules of <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 4.2.1.  Specifically, the peer-address
+field of the innermost Relay-Forward is used as the source address
+for validation.  Since the Proxy Registrar sets peer-address to the
+Registering Host's address and sets the IA Address option to that
+same address, this validation passes as it would for a natively
+relayed ADDR-REG-INFORM from the host.<a href="#section-7-1" class="pilcrow">¶</a></p>
+<p id="section-7-2">A server that recognizes OPTION_ADDR_REG_PROXY in a Relay-Forward
+<span class="bcp14">SHOULD</span> record that the registration is proxy-sourced, alongside the
+Proxy Registrar's link-layer address available from
+OPTION_CLIENT_LINKLAYER_ADDR (<span>[<a href="#RFC6939" class="cite xref">RFC6939</a>]</span>).  This information <span class="bcp14">MAY</span> be
+used for auditing or logging but <span class="bcp14">MUST NOT</span> affect the validation outcome
+for the inner ADDR-REG-INFORM.<a href="#section-7-2" class="pilcrow">¶</a></p>
+<p id="section-7-3">When a server receives a native Self-Registration (a direct
+ADDR-REG-INFORM from the host per <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>, without proxy relay
+encapsulation) for an address that is already proxy-registered, the
+server <span class="bcp14">SHOULD</span> update its record to reflect the native registration and
+clear any proxy-origin flag.  The Self-Registration is authoritative;
+the Proxy Registration entry <span class="bcp14">MUST NOT</span> take precedence.<a href="#section-7-3" class="pilcrow">¶</a></p>
+<p id="section-7-4">A server that does not recognize OPTION_ADDR_REG_PROXY <span class="bcp14">MUST</span> silently
+ignore the option per <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span> Section 10 and process the inner
+ADDR-REG-INFORM exactly as it would any relayed ADDR-REG-INFORM per
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>.  Proxy Registrars therefore interoperate with any existing
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span>-compliant server without server-side changes.<a href="#section-7-4" class="pilcrow">¶</a></p>
+<p id="section-7-5">A server <span class="bcp14">MUST NOT</span> use Proxy Registrations for client authentication or
+authorization, per <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 6.  The constraint that applies
+to self-generated registrations applies equally to proxy-generated ones.<a href="#section-7-5" class="pilcrow">¶</a></p>
+<p id="section-7-6">The server <span class="bcp14">MUST</span> respond with ADDR-REG-REPLY wrapped in a Relay-Reply
+per <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> and <span>[<a href="#RFC9915" class="cite xref">RFC9915</a>]</span>, addressed unicast to the Proxy
+Registrar's source address.<a href="#section-7-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="iot">
+<section id="section-8">
+      <h2 id="name-iot-and-constrained-network">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-iot-and-constrained-network" class="section-name selfRef">IoT and Constrained Network Considerations</a>
+      </h2>
+<p id="section-8-1">This section is informative.<a href="#section-8-1" class="pilcrow">¶</a></p>
+<p id="section-8-2">The IPv6 Backbone Router (6BBR) defined in <span>[<a href="#RFC8929" class="cite xref">RFC8929</a>]</span> is the
+natural implementation vehicle for the Proxy Registrar role in
+networks with 6LoWPAN (<span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>) or other constrained-device
+access links.  The 6BBR:<a href="#section-8-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-8-3.1">
+          <p id="section-8-3.1.1">Already maintains a binding table populated from NS ARO messages
+(<span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>), which constitutes the normative ARO trigger
+described in <a href="#detection" class="auto internal xref">Section 6.1</a>.<a href="#section-8-3.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-8-3.2">
+          <p id="section-8-3.2.1">Already acts as a Neighbor Discovery proxy for 6LoWPAN devices
+on its access link, performing proxy NS/NA on the backbone on
+their behalf.<a href="#section-8-3.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-8-3.3">
+          <p id="section-8-3.3.1">Participates in DHCPv6 as a relay for the backbone network,
+giving it direct access to the relay infrastructure used by
+this document.<a href="#section-8-3.3.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-8-4">When a 6BBR receives an NS ARO from a 6LoWPAN device that creates
+or updates a binding for a globally-scoped address, it <span class="bcp14">SHOULD</span> send
+a Proxy Registration for that address.  The valid-lifetime used in
+the IA Address option <span class="bcp14">MUST</span> be derived from the ARO Registration
+Lifetime field (in units of 60 seconds per <span>[<a href="#RFC8505" class="cite xref">RFC8505</a>]</span>) rather than
+from SLAAC prefix lifetimes from a Router Advertisement, as the ARO
+lifetime is the authoritative source for 6LoWPAN address bindings.<a href="#section-8-4" class="pilcrow">¶</a></p>
+<p id="section-8-5">When a 6BBR ARO binding expires or when an ARO with Registration
+Lifetime=0 is received, the 6BBR <span class="bcp14">SHOULD</span> immediately send an expiry
+registration (preferred-lifetime=0, valid-lifetime=0) for the
+corresponding address.<a href="#section-8-5" class="pilcrow">¶</a></p>
+<p id="section-8-6">After a 6BBR restart, ARO re-registrations from 6LoWPAN devices
+naturally repopulate the binding table, triggering new Proxy
+Registrations.  This is the same recovery path described in
+<a href="#state-machine" class="auto internal xref">Section 6.4</a> for the general case.<a href="#section-8-6" class="pilcrow">¶</a></p>
+<p id="section-8-7">Similar patterns apply to Thread border routers, Bluetooth mesh
+gateways, and other constrained-network access routers that
+maintain equivalent binding tables.  This document does not
+normatively update <span>[<a href="#RFC8929" class="cite xref">RFC8929</a>]</span>; if the 6lo Working Group wishes to
+adopt the Proxy Registrar role as a normative extension to the
+6BBR specification, a separate document is the appropriate path.<a href="#section-8-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="security">
+<section id="section-9">
+      <h2 id="name-security-considerations">
+<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<p id="section-9-1">The security considerations of <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> apply in full to this
+document.  In particular, this mechanism is not intended to be a
+strong security access mechanism: a malicious device can decline to
+trigger DAD or suppress its traffic, thereby preventing the Proxy
+Registrar from observing and registering its address.  Registrations
+<span class="bcp14">MUST NOT</span> be used for client authentication or authorization.<a href="#section-9-1" class="pilcrow">¶</a></p>
+<p id="section-9-2">The Proxy Registrar is a privileged network device capable of
+registering arbitrary IPv6 addresses at the DHCPv6 server.  A
+compromised or misconfigured Proxy Registrar could register false
+address-to-host mappings, undermining the traceability that this
+mechanism is designed to provide.  DHCPv6 servers <span class="bcp14">SHOULD</span> restrict
+acceptance of Relay-Forward messages containing OPTION_ADDR_REG_PROXY
+to trusted relay addresses, using relay authentication mechanisms such
+as those described in <span>[<a href="#RFC8213" class="cite xref">RFC8213</a>]</span>.  First-hop security mechanisms,
+particularly FCFS SAVI (<span>[<a href="#RFC7513" class="cite xref">RFC7513</a>]</span>), provide additional assurance that
+the Proxy Registrar observed a given address before registering it.<a href="#section-9-2" class="pilcrow">¶</a></p>
+<p id="section-9-3">The DUID-LL the Proxy Registrar synthesizes from the Registering Host's
+link-layer address is deterministic and does not introduce tracking
+capabilities beyond those already inherent in the link-layer address,
+which is observable by any on-link device.<a href="#section-9-3" class="pilcrow">¶</a></p>
+<p id="section-9-4">In deployments with active-standby first-hop redundancy (e.g., VRRP),
+only the active router typically forwards traffic and observes DAD, so
+only it acts as Proxy Registrar in practice.  In active-active
+deployments, two routers may independently register the same address.
+Because the DUID-LL derives from the Registering Host's MAC address
+rather than the router's, both registrations appear identical to the
+server, which receives idempotent refreshes from each.  Explicit
+election mechanisms for this scenario are out of scope.<a href="#section-9-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="privacy">
+<section id="section-10">
+      <h2 id="name-privacy-considerations">
+<a href="#section-10" class="section-number selfRef">10. </a><a href="#name-privacy-considerations" class="section-name selfRef">Privacy Considerations</a>
+      </h2>
+<p id="section-10-1">Duplicate avoidance snooping (<a href="#dedup" class="auto internal xref">Section 6.6</a>) requires the Proxy Registrar
+to observe ADDR-REG-INFORM messages sent by hosts to ff02::1:2.  On
+links without MLD snooping, this multicast traffic is visible to all
+on-link observers.  This exposure is identical to the case described in
+<span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 7 for host-originating registrations and introduces
+no additional risk.<a href="#section-10-1" class="pilcrow">¶</a></p>
+<p id="section-10-2">The privacy protections of <span>[<a href="#RFC8981" class="cite xref">RFC8981</a>]</span> temporary addresses are designed
+to prevent cross-site tracking by external observers, who cannot
+correlate IPv6 sessions across address rotations.  Those protections are
+unaffected by operator-internal registration.  The network operator
+already has visibility of the host's topological location at the /64
+boundary from the RA prefix assignment, the neighbor cache, and routing
+state.  The Proxy Registration adds only the specific /128 to an
+internal DHCPv6 record that is not shared with external parties.
+Operators who wish to avoid recording temporary addresses for policy
+reasons <span class="bcp14">MAY</span> configure the Proxy Registrar to suppress registration for
+addresses matching <span>[<a href="#RFC8981" class="cite xref">RFC8981</a>]</span> criteria; such configuration is outside
+the scope of this document.<a href="#section-10-2" class="pilcrow">¶</a></p>
+<p id="section-10-3">As noted in <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> Section 7, the Client DUID enables tracking of
+a host across addresses.  The DUID-LL used in Proxy Registrations
+derives from the host's link-layer address, which is already visible
+to any on-link observer via ND and DAD traffic.<a href="#section-10-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="iana">
+<section id="section-11">
+      <h2 id="name-iana-considerations">
+<a href="#section-11" class="section-number selfRef">11. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-11-1">IANA is requested to assign one new option code in the "Option
+Codes" subregistry of the "Dynamic Host Configuration Protocol for
+IPv6 (DHCPv6)" registry
+<a href="https://www.iana.org/assignments/dhcpv6-parameters">IANA-DHCPV6</a>:<a href="#section-11-1" class="pilcrow">¶</a></p>
+<span id="name-new-dhcpv6-option-code"></span><div id="iana-table">
+<table class="center" id="table-1">
+        <caption>
+<a href="#table-1" class="selfRef">Table 1</a>:
+<a href="#name-new-dhcpv6-option-code" class="selfRef">New DHCPv6 Option Code</a>
+        </caption>
+<thead>
+          <tr>
+            <th class="text-left" rowspan="1" colspan="1">Option Name</th>
+            <th class="text-center" rowspan="1" colspan="1">Code</th>
+            <th class="text-left" rowspan="1" colspan="1">Description</th>
+            <th class="text-center" rowspan="1" colspan="1">Client ORO</th>
+            <th class="text-center" rowspan="1" colspan="1">Singleton</th>
+            <th class="text-center" rowspan="1" colspan="1">Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">OPTION_ADDR_REG_PROXY</td>
+            <td class="text-center" rowspan="1" colspan="1">TBD1</td>
+            <td class="text-left" rowspan="1" colspan="1">DHCPv6 Proxy Address Registration</td>
+            <td class="text-center" rowspan="1" colspan="1">No</td>
+            <td class="text-center" rowspan="1" colspan="1">Yes</td>
+            <td class="text-center" rowspan="1" colspan="1">This document</td>
+          </tr>
+        </tbody>
+      </table>
+</div>
+<span class="break"></span><dl class="dlParallel" id="section-11-3">
+        <dt id="section-11-3.1">Client ORO:</dt>
+        <dd style="margin-left: 1.5em" id="section-11-3.2">
+          <p id="section-11-3.2.1">"No" -- this option is carried in a Relay-Forward message and
+is not requested by clients in an Option Request Option.<a href="#section-11-3.2.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-11-3.3">Singleton:</dt>
+        <dd style="margin-left: 1.5em" id="section-11-3.4">
+          <p id="section-11-3.4.1">"Yes" -- at most one instance of this option <span class="bcp14">MUST</span> be present
+in a Relay-Forward message.<a href="#section-11-3.4.1" class="pilcrow">¶</a></p>
+</dd>
+      <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="sec-combined-references">
+<section id="section-12">
+      <h2 id="name-references">
+<a href="#section-12" class="section-number selfRef">12. </a><a href="#name-references" class="section-name selfRef">References</a>
+      </h2>
+<div id="sec-normative-references">
+<section id="section-12.1">
+        <h3 id="name-normative-references">
+<a href="#section-12.1" class="section-number selfRef">12.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+        </h3>
+<dl class="references">
+<dt id="RFC2119">[RFC2119]</dt>
+        <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC4861">[RFC4861]</dt>
+        <dd>
+<span class="refAuthor">Narten, T.</span>, <span class="refAuthor">Nordmark, E.</span>, <span class="refAuthor">Simpson, W.</span>, and <span class="refAuthor">H. Soliman</span>, <span class="refTitle">"Neighbor Discovery for IP version 6 (IPv6)"</span>, <span class="seriesInfo">RFC 4861</span>, <span class="seriesInfo">DOI 10.17487/RFC4861</span>, <time datetime="2007-09" class="refDate">September 2007</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc4861">https://www.rfc-editor.org/rfc/rfc4861</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC4862">[RFC4862]</dt>
+        <dd>
+<span class="refAuthor">Thomson, S.</span>, <span class="refAuthor">Narten, T.</span>, and <span class="refAuthor">T. Jinmei</span>, <span class="refTitle">"IPv6 Stateless Address Autoconfiguration"</span>, <span class="seriesInfo">RFC 4862</span>, <span class="seriesInfo">DOI 10.17487/RFC4862</span>, <time datetime="2007-09" class="refDate">September 2007</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc4862">https://www.rfc-editor.org/rfc/rfc4862</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC6939">[RFC6939]</dt>
+        <dd>
+<span class="refAuthor">Halwasia, G.</span>, <span class="refAuthor">Bhandari, S.</span>, and <span class="refAuthor">W. Dec</span>, <span class="refTitle">"Client Link-Layer Address Option in DHCPv6"</span>, <span class="seriesInfo">RFC 6939</span>, <span class="seriesInfo">DOI 10.17487/RFC6939</span>, <time datetime="2013-05" class="refDate">May 2013</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc6939">https://www.rfc-editor.org/rfc/rfc6939</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7513">[RFC7513]</dt>
+        <dd>
+<span class="refAuthor">Bi, J.</span>, <span class="refAuthor">Wu, J.</span>, <span class="refAuthor">Yao, G.</span>, and <span class="refAuthor">F. Baker</span>, <span class="refTitle">"Source Address Validation Improvement (SAVI) Solution for DHCP"</span>, <span class="seriesInfo">RFC 7513</span>, <span class="seriesInfo">DOI 10.17487/RFC7513</span>, <time datetime="2015-05" class="refDate">May 2015</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7513">https://www.rfc-editor.org/rfc/rfc7513</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+        <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8174">https://www.rfc-editor.org/rfc/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8505">[RFC8505]</dt>
+        <dd>
+<span class="refAuthor">Thubert, P., Ed.</span>, <span class="refAuthor">Nordmark, E.</span>, <span class="refAuthor">Chakrabarti, S.</span>, and <span class="refAuthor">C. Perkins</span>, <span class="refTitle">"Registration Extensions for IPv6 over Low-Power Wireless Personal Area Network (6LoWPAN) Neighbor Discovery"</span>, <span class="seriesInfo">RFC 8505</span>, <span class="seriesInfo">DOI 10.17487/RFC8505</span>, <time datetime="2018-11" class="refDate">November 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8505">https://www.rfc-editor.org/rfc/rfc8505</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9686">[RFC9686]</dt>
+        <dd>
+<span class="refAuthor">Kumari, W.</span>, <span class="refAuthor">Krishnan, S.</span>, <span class="refAuthor">Asati, R.</span>, <span class="refAuthor">Colitti, L.</span>, <span class="refAuthor">Linkova, J.</span>, and <span class="refAuthor">S. Jiang</span>, <span class="refTitle">"Registering Self-Generated IPv6 Addresses Using DHCPv6"</span>, <span class="seriesInfo">RFC 9686</span>, <span class="seriesInfo">DOI 10.17487/RFC9686</span>, <time datetime="2024-12" class="refDate">December 2024</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9686">https://www.rfc-editor.org/rfc/rfc9686</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9915">[RFC9915]</dt>
+      <dd>
+<span class="refAuthor">Mrugalski, T.</span>, <span class="refAuthor">Volz, B.</span>, <span class="refAuthor">Richardson, M.</span>, <span class="refAuthor">Jiang, S.</span>, and <span class="refAuthor">T. Winters</span>, <span class="refTitle">"Dynamic Host Configuration Protocol for IPv6 (DHCPv6)"</span>, <span class="seriesInfo">STD 102</span>, <span class="seriesInfo">RFC 9915</span>, <span class="seriesInfo">DOI 10.17487/RFC9915</span>, <time datetime="2026-01" class="refDate">January 2026</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9915">https://www.rfc-editor.org/rfc/rfc9915</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="sec-informative-references">
+<section id="section-12.2">
+        <h3 id="name-informative-references">
+<a href="#section-12.2" class="section-number selfRef">12.2. </a><a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+        </h3>
+<dl class="references">
+<dt id="I-D.ietf-6man-ipv6-neighbor-discovery-yang">[I-D.ietf-6man-ipv6-neighbor-discovery-yang]</dt>
+        <dd>
+<span class="refAuthor">Zhang, F.</span>, <span class="refAuthor">Zhu, Y.</span>, <span class="refAuthor">Wu, B.</span>, and <span class="refAuthor">J. Hu</span>, <span class="refTitle">"YANG Data Model for IPv6 Neighbor Discovery"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-6man-ipv6-neighbor-discovery-yang-09</span>, <time datetime="2026-11-02" class="refDate">2 November 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-6man-ipv6-neighbor-discovery-yang-09">https://datatracker.ietf.org/doc/html/draft-ietf-6man-ipv6-neighbor-discovery-yang-09</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC2131">[RFC2131]</dt>
+        <dd>
+<span class="refAuthor">Droms, R.</span>, <span class="refTitle">"Dynamic Host Configuration Protocol"</span>, <span class="seriesInfo">RFC 2131</span>, <span class="seriesInfo">DOI 10.17487/RFC2131</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2131">https://www.rfc-editor.org/rfc/rfc2131</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8213">[RFC8213]</dt>
+        <dd>
+<span class="refAuthor">Volz, B.</span> and <span class="refAuthor">Y. Pal</span>, <span class="refTitle">"Security of Messages Exchanged between Servers and Relay Agents"</span>, <span class="seriesInfo">RFC 8213</span>, <span class="seriesInfo">DOI 10.17487/RFC8213</span>, <time datetime="2017-08" class="refDate">August 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8213">https://www.rfc-editor.org/rfc/rfc8213</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8344">[RFC8344]</dt>
+        <dd>
+<span class="refAuthor">Bjorklund, M.</span>, <span class="refTitle">"A YANG Data Model for IP Management"</span>, <span class="seriesInfo">RFC 8344</span>, <span class="seriesInfo">DOI 10.17487/RFC8344</span>, <time datetime="2018-03" class="refDate">March 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8344">https://www.rfc-editor.org/rfc/rfc8344</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8929">[RFC8929]</dt>
+        <dd>
+<span class="refAuthor">Thubert, P., Ed.</span>, <span class="refAuthor">Perkins, C.E.</span>, and <span class="refAuthor">E. Levy-Abegnoli</span>, <span class="refTitle">"IPv6 Backbone Router"</span>, <span class="seriesInfo">RFC 8929</span>, <span class="seriesInfo">DOI 10.17487/RFC8929</span>, <time datetime="2020-11" class="refDate">November 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8929">https://www.rfc-editor.org/rfc/rfc8929</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8981">[RFC8981]</dt>
+      <dd>
+<span class="refAuthor">Gont, F.</span>, <span class="refAuthor">Krishnan, S.</span>, <span class="refAuthor">Narten, T.</span>, and <span class="refAuthor">R. Draves</span>, <span class="refTitle">"Temporary Address Extensions for Stateless Address Autoconfiguration in IPv6"</span>, <span class="seriesInfo">RFC 8981</span>, <span class="seriesInfo">DOI 10.17487/RFC8981</span>, <time datetime="2021-02" class="refDate">February 2021</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8981">https://www.rfc-editor.org/rfc/rfc8981</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="acknowledgments">
+<section id="appendix-A">
+      <h2 id="name-acknowledgments">
+<a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
+      </h2>
+<p id="appendix-A-1">The authors of <span>[<a href="#RFC9686" class="cite xref">RFC9686</a>]</span> (Warren Kumari, Suresh Krishnan,
+Rajiv Asati, Lorenzo Colitti, Jen Linkova, and Sheng Jiang)
+created the base mechanism that this document extends.  Their work
+on address registration provides the protocol foundation on which
+the Proxy Registrar role is built.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-B">
+      <h2 id="name-authors-address">
+<a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Nick Buraglio</span></div>
+<div dir="auto" class="left"><span class="org">Energy Sciences Network</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:buraglio@forwardingplane.net" class="email">buraglio@forwardingplane.net</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>
