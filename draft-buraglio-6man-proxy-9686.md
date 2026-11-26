@@ -3,7 +3,7 @@ title: "Proxy Registration of Self-Generated IPv6 Addresses Using DHCPv6"
 abbrev: "DHCPv6 Proxy Address Registration"
 category: std
 
-docname: draft-buraglio-6man-proxy-9686-00
+docname: draft-buraglio-6man-proxy-9686-latest
 submissiontype: IETF
 number:
 date:
