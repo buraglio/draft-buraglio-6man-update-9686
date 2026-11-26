@@ -3,7 +3,7 @@ title: "Proxy Registration of Self-Generated IPv6 Addresses Using DHCPv6"
 abbrev: "DHCPv6 Proxy Address Registration"
 category: std
 
-docname: draft-buraglio-6man-proxy-9686-latest
+docname: draft-buraglio-6man-proxy-9686-00
 submissiontype: IETF
 number:
 date:
@@ -55,13 +55,13 @@ informative:
 
 --- abstract
 
-A prior RFC defines a method for IPv6 hosts to register their
+RFC 9686 defines a method for IPv6 hosts to register their
 self-generated or statically configured addresses with a DHCPv6 server,
 restoring the address-to-host traceability that network operators rely on
 for troubleshooting and forensic investigation.  That mechanism requires
 a conformant client implementation on the registering host.  Many
-devices, including IoT sensors, legacy endpoints, and constrained
-6LoWPAN nodes, do not and will not implement such a client.
+devices, including IoT sensors, legacy endpoints, operational technology devices, 
+speciality instruments, and constrained 6LoWPAN nodes, do not and will not implement such a client.
 
 This document defines the behavior of a Proxy Registrar: a first-hop
 IPv6 router that observes address assignment events on its links and
@@ -74,7 +74,7 @@ changes to interoperate with a Proxy Registrar.
 
 --- middle
 
-# Introduction {#intro}
+# Introduction
 
 {{RFC9686}} defines ADDR-REG-INFORM and ADDR-REG-REPLY message types
 that allow an IPv6 host to inform a DHCPv6 server of its self-generated
@@ -90,24 +90,15 @@ Improvement (SAVI) binding table ({{RFC7513}}), and in 6LoWPAN networks
 receives explicit Address Registration Options (ARO) from devices
 ({{RFC8505}}).  This document defines a Proxy Registrar role for
 first-hop routers, enabling them to register addresses on behalf of
-hosts that have not performed self-registration, using the same
-DHCPv6 relay infrastructure already deployed in most networks.
+hosts that have not or are unable to performed self-registration, using the same
+DHCPv6 relay infrastructure already deployed.
 
-The remainder of this document is organized as follows.
-{{problem}} describes the problem in detail.
-{{overview}} provides a protocol overview.
-{{option}} defines the new OPTION_ADDR_REG_PROXY relay option.
-{{proxy-behavior}} specifies Proxy Registrar behavior.
-{{server}} specifies DHCPv6 server behavior.
-{{iot}} discusses IoT and constrained-network considerations.
-{{security}} and {{privacy}} address security and privacy.
-{{iana}} contains IANA considerations.
 
-# Conventions and Definitions {#conventions}
+# Conventions and Definitions
 
 {::boilerplate bcp14-tagged}
 
-Terms defined in {{RFC9686}} are used as defined therein, including
+Terms defined in {{RFC9686}} are used as defined in said document, including
 ADDR-REG-INFORM, ADDR-REG-REPLY, and OPTION_ADDR_REG_ENABLE.
 
 This document defines the following additional terms:
@@ -133,7 +124,7 @@ Registering Host:
 Self-Registration:
 : Address registration performed directly by the host per {{RFC9686}}.
 
-# Problem Statement {#problem}
+# Problem Statement
 
 It is common operational practice, particularly in enterprise and
 campus networks, to use DHCP logs for troubleshooting and forensic
@@ -191,15 +182,15 @@ register addresses on behalf of non-capable hosts, placing the
 resulting records in the same DHCPv6 server that operators already
 consult for address-to-host correlation.
 
-# Protocol Overview {#overview}
+# Protocol Overview
 
 The Proxy Registrar monitors its directly attached links for new
 globally-scoped IPv6 addresses appearing on Registering Hosts (see
-{{detection}}).  Upon detecting a new address, the Proxy Registrar
+Section 6.1).  Upon detecting a new address, the Proxy Registrar
 first verifies that the DHCPv6 server supports address registration
-({{capability}}), then constructs an ADDR-REG-INFORM message on
+(Section 6.2), then constructs an ADDR-REG-INFORM message on
 behalf of the Registering Host and delivers it to the DHCPv6 server
-via the existing relay infrastructure ({{procedure}}).
+via the existing relay infrastructure (Section 6.3).
 
 The key protocol element is the choice of relay encapsulation.
 {{RFC9686}} Section 4.2.1 specifies that when an ADDR-REG-INFORM is
@@ -207,7 +198,7 @@ relayed, the server validates the registered address against the
 peer-address field of the innermost Relay-Forward message.  The Proxy
 Registrar exploits this by acting as the innermost relay, setting
 peer-address to the Registering Host's address, and including a new
-relay option, OPTION_ADDR_REG_PROXY ({{option}}), that identifies the
+relay option, OPTION_ADDR_REG_PROXY (Section 5), that identifies the
 encapsulated message as a Proxy Registration.  An
 OPTION_CLIENT_LINKLAYER_ADDR option {{RFC6939}} carries the
 Registering Host's link-layer address.
@@ -251,12 +242,12 @@ basic interoperability.
 If the Proxy Registrar detects that the Registering Host has
 performed Self-Registration (by snooping ADDR-REG-INFORM traffic
 on the link), it suppresses or withdraws its Proxy Registration to
-avoid duplicate entries at the server ({{dedup}}).  The Proxy
+avoid duplicate entries at the server (Section 6.6).  The Proxy
 Registrar tracks registered addresses in a Proxy Registration Table
-({{table}}) and issues refreshes and expirations as the address
-lifetime evolves ({{refresh}}).
+(Section 6.8) and issues refreshes and expirations as the address
+lifetime evolves (Section 6.7).
 
-# The OPTION_ADDR_REG_PROXY Option {#option}
+# The OPTION_ADDR_REG_PROXY Option
 
 The OPTION_ADDR_REG_PROXY option is a zero-length DHCPv6 option
 carried in a Relay-Forward message to signal that the encapsulated
@@ -290,14 +281,14 @@ This ensures backward compatibility: a Proxy Registrar interoperates
 with any existing {{RFC9686}}-compliant server.
 
 A DHCPv6 server that does recognize this option SHOULD record the
-proxy-origin of the registration (see {{server}}).  The presence of
+proxy-origin of the registration (see Section 7).  The presence of
 this option MUST NOT cause the server to alter its validation of the
 inner ADDR-REG-INFORM; validation follows {{RFC9686}} Section 4.2.1
 unchanged.
 
-# Proxy Registrar Behavior {#proxy-behavior}
+# Proxy Registrar Behavior
 
-## Address Detection {#detection}
+## Address Detection
 
 The Proxy Registrar MUST register each globally-scoped unicast
 address independently.  Registration MUST NOT be performed for
@@ -326,7 +317,7 @@ the following events for a globally-scoped unicast address:
     a Neighbor Solicitation carrying an Address Registration Option
     ({{RFC8505}}) that creates or updates a binding for a
     globally-scoped address.  This is the normative trigger when
-    operating as a 6LoWPAN Backbone Router; see {{iot}}.
+    operating as a 6LoWPAN Backbone Router; see Section 8.
 
 4.  **Neighbor cache REACHABLE transition.**  A new globally-scoped
     unicast address appears in the neighbor cache in REACHABLE state.
@@ -339,8 +330,7 @@ Triggers 1, 2, and 3 are preferred over trigger 4 wherever available.
 A Proxy Registrar MUST implement trigger 1.  Triggers 2, 3, and 4 are
 implementation options subject to their applicability conditions.
 
-## Capability Discovery {#capability}
-
+## Capability Discovery
 The Proxy Registrar MUST verify that the DHCPv6 server supports
 address registration before sending any Proxy Registration.  It does
 so by including OPTION_ADDR_REG_ENABLE ({{RFC9686}} Section 4.4) in
@@ -359,10 +349,10 @@ for subsequent registrations.  The cache MUST be invalidated if the
 DHCPv6 server address changes or if the Proxy Registrar receives a
 Reply that does not include OPTION_ADDR_REG_ENABLE.
 
-## Proxy Registration Procedure {#procedure}
+## Proxy Registration Procedure
 
-Upon detecting a new address per {{detection}} and confirming server
-support per {{capability}}, the Proxy Registrar sends a Relay-Forward
+Upon detecting a new address per Section 6.1 and confirming server
+support per Section 6.2, the Proxy Registrar sends a Relay-Forward
 message with the following field values.
 
 The outer Relay-Forward uses msg-type RELAY-FORW (12) per {{RFC9915}}.
@@ -376,7 +366,7 @@ identifying the client's link to the server.  The peer-address MUST be
 set to the IPv6 address being registered; this value MUST equal the
 address in the IA Address option of the encapsulated ADDR-REG-INFORM.
 
-The Relay-Forward MUST include OPTION_ADDR_REG_PROXY ({{option}}) to
+The Relay-Forward MUST include OPTION_ADDR_REG_PROXY (Section 5) to
 signal proxy origin, OPTION_CLIENT_LINKLAYER_ADDR ({{RFC6939}}) set to
 the Registering Host's link-layer address as observed from the detection
 trigger (DAD, SAVI binding, or ARO) with the hardware type set from the
@@ -392,7 +382,7 @@ registered; the valid-lifetime MUST be set to the remaining valid-lifetime
 of the prefix containing the registered address at the time of
 registration, as advertised in the most recent Router Advertisement sent
 by the Proxy Registrar for that prefix.  The preferred-lifetime and
-valid-lifetime are described further in {{refresh}}.  The inner
+valid-lifetime are described further in Section 6.7.  The inner
 ADDR-REG-INFORM MUST NOT contain a Server Identifier option or an Option
 Request Option.
 
@@ -412,10 +402,10 @@ of a Registering Host independently.  A host with addresses from
 multiple prefixes will have one Proxy Registration Table entry per
 address, each managed with its own procedure and lifetime.
 
-## Proxy Registrar State Machine {#state-machine}
+## Proxy Registrar State Machine
 
 The Proxy Registrar maintains per-address state in the Proxy
-Registration Table ({{table}}).  Each entry transitions through the
+Registration Table (Section 6.8).  Each entry transitions through the
 following states:
 
 PENDING:
@@ -441,7 +431,7 @@ State transitions are as follows:
 *  PENDING -> REGISTERED: an ADDR-REG-REPLY is received with success
    status (Status Code absent or Success).  The Proxy Registrar
    updates the registration timestamp and schedules the next refresh
-   per {{refresh}}.
+   per Section 6.7.
 
 *  PENDING -> FAILED: retransmission count reaches MRC (3) without
    receiving an ADDR-REG-REPLY, or an ADDR-REG-REPLY with a
@@ -450,13 +440,13 @@ State transitions are as follows:
    detection event for this address.
 
 *  PENDING -> SUPPRESSED: host Self-Registration is detected while
-   the ADDR-REG-INFORM is in flight (see {{dedup}}).  The Proxy
+   the ADDR-REG-INFORM is in flight (see Section 6.6).  The Proxy
    Registrar waits for the ADDR-REG-REPLY (or retransmission
    timeout), then sends a final ADDR-REG-INFORM with
    preferred-lifetime=0 and valid-lifetime=0 to withdraw the Proxy
    Registration, and transitions to SUPPRESSED.
 
-*  REGISTERED -> PENDING: a refresh is due per {{refresh}}.  The
+*  REGISTERED -> PENDING: a refresh is due per Section 6.7.  The
    Proxy Registrar sends a new ADDR-REG-INFORM.
 
 *  REGISTERED -> SUPPRESSED: host Self-Registration is detected.
@@ -464,7 +454,7 @@ State transitions are as follows:
    preferred-lifetime=0 and valid-lifetime=0 to withdraw the Proxy
    Registration, then transitions to SUPPRESSED.
 
-*  REGISTERED -> (removed): an expiry trigger fires per {{refresh}}.
+*  REGISTERED -> (removed): an expiry trigger fires per Section 6.7.
    The Proxy Registrar sends an ADDR-REG-INFORM with
    preferred-lifetime=0 and valid-lifetime=0, then removes the
    entry from the Proxy Registration Table.
@@ -486,9 +476,9 @@ address.  A transient gap exists between restart and repopulation
 during which the server's proxy-registration records may be more
 current than the Proxy Registrar's table.  This gap is bounded by
 ND reachability timescales and is acceptable for the operational
-use cases described in {{problem}}.
+use cases described in Section 3.
 
-## Retransmission {#retransmission}
+## Retransmission
 
 The Proxy Registrar follows the retransmission procedure of
 {{RFC9915}} Section 15 for each ADDR-REG-INFORM it sends, with the
@@ -514,10 +504,10 @@ current remaining lifetimes in each retransmission.
 
 Upon exhausting retransmissions (MRC reached) without receiving an
 ADDR-REG-REPLY, the Proxy Registrar MUST transition the entry to
-FAILED state ({{state-machine}}) and cease retransmission.  It MUST
+FAILED state (Section 6.4) and cease retransmission.  It MUST
 NOT retry until the next address detection event for that address.
 
-## Duplicate Avoidance {#dedup}
+## Duplicate Avoidance
 
 The Proxy Registrar MUST snoop ADDR-REG-INFORM messages sent by
 hosts on its directly attached links.  These messages are sent to
@@ -553,7 +543,7 @@ Registrar MUST NOT send further registrations or refreshes for that
 address.  The Registering Host's own registration becomes the
 authoritative entry at the server.
 
-## Refresh and Expiry {#refresh}
+## Refresh and Expiry
 
 For an address configured using SLAAC ({{RFC4862}}), the Proxy
 Registrar computes the refresh interval as:
@@ -581,7 +571,7 @@ by external observers; they do not preclude operator-internal address
 management.  The network operator already has visibility of the host's
 topological location at the /64 boundary from the prefix assignment, so
 registering the specific /128 in the DHCPv6 server adds no information
-to external parties (see {{privacy}}).  When a host generates a new
+to external parties (see Section 10).  When a host generates a new
 temporary address, DAD for the new address triggers a new Proxy
 Registration entry; expiry of the old address follows the triggers
 described below.
@@ -600,12 +590,12 @@ the Proxy Registration Table upon any of the following:
 *  The FCFS SAVI binding for the address expires.
 
 *  The ARO binding for the address expires, or an ARO with
-   Registration Lifetime=0 is received (see {{iot}}).
+   Registration Lifetime=0 is received (see Section 8).
 
 *  The valid-lifetime of the prefix containing the address reaches
    zero in the most recently sent Router Advertisement.
 
-## Proxy Registration Table {#table}
+## Proxy Registration Table
 
 The Proxy Registrar MUST maintain a Proxy Registration Table per
 interface.  Each entry MUST contain at minimum:
@@ -614,7 +604,7 @@ interface.  Each entry MUST contain at minimum:
 
 *  Registered IPv6 address
 
-*  Current state (per {{state-machine}}: PENDING, REGISTERED,
+*  Current state (per Section 6.4: PENDING, REGISTERED,
    FAILED, or SUPPRESSED)
 
 *  Next refresh time (for REGISTERED entries)
@@ -623,14 +613,14 @@ interface.  Each entry MUST contain at minimum:
 
 The table is implementation-internal; no wire format is defined.
 The Proxy Registrar MUST consult the table before sending any Proxy
-Registration to enforce duplicate avoidance per {{dedup}}.
+Registration to enforce duplicate avoidance per Section 6.6.
 
 A Registering Host with multiple globally-scoped unicast addresses
 has one entry per address.  Entries are independent: a SUPPRESSED
 entry for one address does not affect registration of other addresses
 held by the same host.
 
-# DHCPv6 Server Behavior {#server}
+# DHCPv6 Server Behavior
 
 A DHCPv6 server that receives a Relay-Forward containing an
 encapsulated ADDR-REG-INFORM MUST process it using the validation
@@ -669,7 +659,7 @@ The server MUST respond with ADDR-REG-REPLY wrapped in a Relay-Reply
 per {{RFC9686}} and {{RFC9915}}, addressed unicast to the Proxy
 Registrar's source address.
 
-# IoT and Constrained Network Considerations {#iot}
+# IoT and Constrained Network Considerations
 
 This section is informative.
 
@@ -680,7 +670,7 @@ access links.  The 6BBR:
 
 *  Already maintains a binding table populated from NS ARO messages
    ({{RFC8505}}), which constitutes the normative ARO trigger
-   described in {{detection}}.
+   described in Section 6.1.
 
 *  Already acts as a Neighbor Discovery proxy for 6LoWPAN devices
    on its access link, performing proxy NS/NA on the backbone on
@@ -706,7 +696,7 @@ corresponding address.
 After a 6BBR restart, ARO re-registrations from 6LoWPAN devices
 naturally repopulate the binding table, triggering new Proxy
 Registrations.  This is the same recovery path described in
-{{state-machine}} for the general case.
+Section 6.4 for the general case.
 
 Similar patterns apply to Thread border routers, Bluetooth mesh
 gateways, and other constrained-network access routers that
@@ -715,7 +705,7 @@ normatively update {{RFC8929}}; if the 6lo Working Group wishes to
 adopt the Proxy Registrar role as a normative extension to the
 6BBR specification, a separate document is the appropriate path.
 
-# Security Considerations {#security}
+# Security Considerations
 
 The security considerations of {{RFC9686}} apply in full to this
 document.  In particular, this mechanism is not intended to be a
@@ -749,9 +739,9 @@ rather than the router's, both registrations appear identical to the
 server, which receives idempotent refreshes from each.  Explicit
 election mechanisms for this scenario are out of scope.
 
-# Privacy Considerations {#privacy}
+# Privacy Considerations
 
-Duplicate avoidance snooping ({{dedup}}) requires the Proxy Registrar
+Duplicate avoidance snooping (Section 6.6) requires the Proxy Registrar
 to observe ADDR-REG-INFORM messages sent by hosts to ff02::1:2.  On
 links without MLD snooping, this multicast traffic is visible to all
 on-link observers.  This exposure is identical to the case described in
@@ -776,7 +766,7 @@ a host across addresses.  The DUID-LL used in Proxy Registrations
 derives from the host's link-layer address, which is already visible
 to any on-link observer via ND and DAD traffic.
 
-# IANA Considerations {#iana}
+# IANA Considerations
 
 IANA is requested to assign one new option code in the "Option
 Codes" subregistry of the "Dynamic Host Configuration Protocol for
@@ -801,8 +791,7 @@ Singleton:
 # Acknowledgments
 {:numbered="false"}
 
-The authors of {{RFC9686}} (Warren Kumari, Suresh Krishnan,
+The authors would like to acknoledge the work and guidance of Ed Hopley and Tom Coffeen as well as the authors
+of {{RFC9686}} (Warren Kumari, Suresh Krishnan,
 Rajiv Asati, Lorenzo Colitti, Jen Linkova, and Sheng Jiang)
-created the base mechanism that this document extends.  Their work
-on address registration provides the protocol foundation on which
-the Proxy Registrar role is built.
+
