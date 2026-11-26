@@ -9,8 +9,8 @@ number:
 date:
 consensus: true
 v: 3
-area: INT
-workgroup: 6man
+area: "Internet"
+workgroup: "IPv6 Maintenance"
 keyword:
  - IPv6
  - DHCPv6
@@ -20,12 +20,12 @@ keyword:
  - proxy
 
 venue:
-  group: 6man
-  type: Working Group
-  mail: ipv6@ietf.org
-  arch: https://mailarchive.ietf.org/arch/browse/ipv6/
-  github: buraglio/draft-buraglio-6man-update-9686
-  latest: https://buraglio.github.io/draft-buraglio-6man-update-9686/
+  group: "IPv6 Maintenance"
+  type: "Working Group"
+  mail: "ipv6@ietf.org"
+  arch: "https://mailarchive.ietf.org/arch/browse/ipv6/"
+  github: "buraglio/draft-buraglio-6man-update-9686"
+  latest: "https://buraglio.github.io/draft-buraglio-6man-update-9686/draft-buraglio-6man-proxy-9686.html"
 
 author:
  -
